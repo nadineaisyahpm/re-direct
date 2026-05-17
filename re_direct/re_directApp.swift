@@ -7,9 +7,36 @@
 
 import SwiftUI
 import SwiftData
+import CoreText
 
 @main
 struct re_directApp: App {
+
+    init() {
+        // Register Instrument Serif fonts manually using CoreText.
+        // This bypasses UIAppFonts / Info.plist entirely — we find the
+        // font files directly in the app bundle and register them at launch.
+        // This is the most reliable approach for multi-platform Xcode projects.
+        registerFont(named: "InstrumentSerif-Regular", extension: "ttf")
+        registerFont(named: "InstrumentSerif-Italic", extension: "ttf")
+    }
+
+    // Finds a font file in the bundle and registers it with CoreText.
+    // Once registered, SwiftUI's .custom("PostScriptName", size:) can use it.
+    private func registerFont(named name: String, extension ext: String) {
+        guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
+            print("❌ Font file not found in bundle: \(name).\(ext)")
+            return
+        }
+        var error: Unmanaged<CFError>?
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
+        if let error = error {
+            print("❌ Failed to register \(name): \(error.takeRetainedValue())")
+        } else {
+            print("✅ Registered font: \(name)")
+        }
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -25,7 +52,9 @@ struct re_directApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // Show the onboarding screen on launch.
+            // Swap this back to ContentView() once auth is wired up.
+            OnboardingView()
         }
         .modelContainer(sharedModelContainer)
     }
