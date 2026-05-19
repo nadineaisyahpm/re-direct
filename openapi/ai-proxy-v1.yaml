@@ -1,0 +1,266 @@
+openapi: 3.1.0
+info:
+  title: re:direct AI Proxy
+  version: 0.1.0
+  summary: Curiosity-prompt generation proxy for the re:direct iOS app.
+  description: |
+    Single-endpoint proxy that the iOS client calls to obtain AI-generated
+    curiosity prompts. The proxy is the only network surface re:direct talks to
+    other than Apple's authentication services.
+
+    ## Data boundary
+
+    The iOS client sends to this proxy:
+      - An Apple identity token (Authorization header) — used only to verify
+        access. It is not stored and is not forwarded to the AI provider.
+      - A pseudonymous device identifier (X-Device-Anon-Id) — a random UUID
+        generated on first launch, stored in the Keychain, rotated yearly.
+      - A sanitized curiosity-generation prompt: interests, optional mood,
+        time budget, recent prompt-hash exclusions, locale, provider preference.
+
+    The iOS client never sends:
+      - Reflections
+      - Timer history
+      - App-usage history or Screen Time data
+      - Apple display name or email
+      - Past prompt text (only opaque hashes of prior local recommendations)
+
+    Authentication metadata leaves the device only to verify access to the
+    proxy. It is not forwarded to the AI provider. The AI provider receives
+    only the sanitized curiosity-generation prompt.
+
+    ## Persistent identifiers
+
+    All persistent identifiers used for rate limiting or application logs are
+    HMAC-SHA256 hashed server-side using a server-held secret. Raw Apple
+    subject claims, raw device IDs, raw request bodies, and response bodies
+    are not written to application logs. Network-layer metadata (e.g. source
+    IP) may be processed by the hosting platform; see deployment notes.
+
+    ## Proxy cache
+
+    The proxy may cache generated outputs for identical sanitized inputs for
+    up to 7 days, keyed by HMAC-SHA256(server_secret, normalized_input). It
+    does not store raw request bodies, Apple tokens, reflections, app-usage
+    history, or timer history.
+
+servers:
+  - url: https://api.redirect.app/v1
+    description: Production
+  - url: https://staging.api.redirect.app/v1
+    description: Staging
+
+paths:
+  /curiosity/generate:
+    post:
+      summary: Generate a curiosity prompt
+      operationId: generateCuriosity
+      security:
+        - appleIdentityToken: []
+      parameters:
+        - in: header
+          name: X-Client-Version
+          required: true
+          schema:
+            type: string
+            example: redirect-ios/0.2.0
+        - in: header
+          name: X-Device-Anon-Id
+          required: true
+          description: |
+            Pseudonymous device identifier (UUIDv4) generated on first launch,
+            stored in the iOS Keychain, rotated yearly. Hashed server-side
+            before any logging or rate-limit storage.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CuriosityRequest'
+      responses:
+        '200':
+          description: Generated curiosity prompt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CuriosityResponse'
+        '400':
+          description: Invalid input.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Apple identity token missing, expired, or invalid.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Requested provider unavailable to this client.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '426':
+          description: Client version no longer supported.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: Rate limited.
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: Upstream AI provider returned an error.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: Proxy in maintenance.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '504':
+          description: Upstream AI provider timed out.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  securitySchemes:
+    appleIdentityToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Sign In with Apple identity token. Verified via Apple JWKS.
+
+  schemas:
+    ProviderPreference:
+      type: string
+      enum: [auto, openai, anthropic, ollama, mistral]
+      default: auto
+      description: |
+        Client preference for AI provider. The proxy may override based on
+        availability, cost rules, or operator configuration. Provider names
+        are config-driven and may expand without an OpenAPI version bump.
+
+    CuriosityRequest:
+      type: object
+      required: [interests, time_available_minutes]
+      additionalProperties: false
+      properties:
+        interests:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            type: string
+            minLength: 1
+            maxLength: 40
+            pattern: "^[A-Za-z][A-Za-z \\-]{0,39}$"
+          description: |
+            User-selected interest keywords. Validated client-side against the
+            same regex.
+        mood:
+          type: string
+          maxLength: 32
+          nullable: true
+        time_available_minutes:
+          type: integer
+          minimum: 5
+          maximum: 120
+        exclude_prompt_hashes:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 8
+            maxLength: 128
+          description: |
+            Server-computed HMAC hashes of recent local recommendations
+            (echoed from prior `prompt_input_hash` values). Used by the proxy
+            to skip cached repeats. The client also filters local repeats.
+        provider_preference:
+          $ref: '#/components/schemas/ProviderPreference'
+        locale:
+          type: string
+          pattern: "^[a-z]{2}(-[A-Z]{2})?$"
+          example: en-US
+
+    CuriosityResponse:
+      type: object
+      required:
+        - id
+        - topic_title
+        - prompt_body
+        - suggested_minutes
+        - provider
+        - model_version
+        - prompt_input_hash
+        - cached
+        - created_at
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: Server-side recommendation id (opaque, ULID).
+        topic_slug:
+          type: string
+          nullable: true
+          description: Matches a seeded CuriosityTopic slug if one applies.
+        topic_title:
+          type: string
+        prompt_body:
+          type: string
+        suggested_minutes:
+          type: integer
+          minimum: 1
+          maximum: 240
+        provider:
+          type: string
+          example: anthropic-haiku-4-5
+        model_version:
+          type: string
+        prompt_input_hash:
+          type: string
+          description: |
+            HMAC-SHA256(server_secret, normalized_input). Stable across
+            identical sanitized inputs. The client stores this and echoes it
+            back via `exclude_prompt_hashes` to avoid repeats.
+        cached:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              enum:
+                - invalid_input
+                - invalid_token
+                - provider_blocked
+                - rate_limited
+                - upstream_failed
+                - proxy_unavailable
+                - upstream_timeout
+                - client_upgrade_required
+            message:
+              type: string
+            retry_after_seconds:
+              type: integer
+              nullable: true
