@@ -1,18 +1,4 @@
-//
-//  DashboardView.swift
-//  re_direct
-//
-//  Main home screen after login.
-//  Beginner-friendly — every section is commented.
-//
-
 import SwiftUI
-
-// ─────────────────────────────────────────────
-// MARK: - Dashboard View
-// ─────────────────────────────────────────────
-// Root view. ZStack layers background + grain behind everything.
-// ScrollView holds all content. Navbar floats outside the scroll.
 
 struct DashboardView: View {
 
@@ -21,28 +7,12 @@ struct DashboardView: View {
         GeometryReader { geo in
             ZStack {
 
-                // ── Background: warm beige gradient ───────────────
-                // #EDE8DF at top — parchment/cream tone matching Figma.
-                // Fades to a slightly deeper warm sand at the bottom.
-                LinearGradient(
-                    colors: [
-                        Color(hex: "#EDE8DF"),
-                        Color(hex: "#D4CCC0")
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                PaperBackground(variant: .cool)
 
-                // ── Grain texture ─────────────────────────────────
-                // Coarse film grain — same as OnboardingView.
                 DashboardGrain()
                     .drawingGroup()
                     .ignoresSafeArea()
 
-                // ── Scrollable content ────────────────────────────
-                // All sections live inside this ScrollView.
-                // Bottom padding clears the floating navbar.
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 0) {
 
@@ -51,32 +21,20 @@ struct DashboardView: View {
                             .padding(.horizontal, 20)
 
                         SearchBarView()
-                            .padding(.top, 14)
+                            .padding(.top, 10)
                             .padding(.horizontal, 20)
+                            .padding(.bottom, 10)
 
                         DailyDirectSection()
-                            .padding(.top, 22)
+                            .padding(.top, 5)
 
                         ReLogWidget()
-                            .padding(.top, 22)
+                            .padding(.top, 35)
                             .padding(.horizontal, 20)
-                            // Extra bottom padding so the widget doesn't
-                            // visually merge with the floating navbar below.
-                            .padding(.bottom, 8)
+                            .padding(.bottom, 25)
 
-                        // Clears the floating navbar at the bottom.
-                        Spacer().frame(height: 100)
+                        Spacer().frame(height: DSMetric.bottomNavClearance)
                     }
-                }
-
-                // ── Floating navbar ───────────────────────────────
-                // Pinned to the bottom using a VStack with a Spacer.
-                // Lives outside the ScrollView so it never scrolls away.
-                VStack {
-                    Spacer()
-                    NavBar()
-                        .padding(.bottom, geo.safeAreaInsets.bottom + 8)
-                        .padding(.horizontal, 24)
                 }
             }
             .ignoresSafeArea()
@@ -85,518 +43,540 @@ struct DashboardView: View {
     }
 }
 
-// ─────────────────────────────────────────────
-// MARK: - Header Section
-// ─────────────────────────────────────────────
-// "hello," on one line, "Nadine." on the next with a yellow highlight.
-// The highlight uses .background() with padding so it hugs the text
-// tightly rather than being a fixed-width rectangle.
 
-struct HeaderSection: View {
+    struct HeaderSection: View {
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-
-            // "hello," — smaller, italic serif, no highlight
-            Text("hello,")
-                .font(.custom("InstrumentSerif-Italic", size: 22))
-                .foregroundColor(Color(hex: "#2C2825"))
-
-            // "Nadine." — yellow highlight hugs only the text width.
-            // Applying .background() directly on the Text view means
-            // the highlight is exactly as wide as the text — never full width.
-            // The thin Rectangle below acts as an underline inside the box.
+        var body: some View {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Nadine.")
-                    .font(.custom("InstrumentSerif-Italic", size: 38))
+                Text("hello,")
+                    .font(.custom("InstrumentSerif-Italic", size: 22))
                     .foregroundColor(Color(hex: "#2C2825"))
-                    .padding(.horizontal, 6)
-                    .padding(.top, 2)
-                    .padding(.bottom, 2)
-                    .background(
-                        // .background on Text itself — width matches text exactly.
-                        Color(hex: "#F0E68C").opacity(0.7)
-                    )
 
-                // Thin underline drawn as a separate Rectangle.
-                // Width matches the text by being inside the same VStack
-                // with fixedSize applied — it won't stretch full width.
-                Rectangle()
-                    .fill(Color(hex: "#2C2825").opacity(0.45))
-                    .frame(height: 1.5)
-                    .padding(.horizontal, 6)
-            }
-            // fixedSize(horizontal: true) is the key — it tells SwiftUI
-            // to size this VStack to fit its content width, not stretch
-            // to fill the parent. Without this, the highlight goes full width.
-            .fixedSize(horizontal: true, vertical: false)
-        }
-    }
-}
-
-// ─────────────────────────────────────────────
-// MARK: - Search Bar
-// ─────────────────────────────────────────────
-// Non-functional visual search bar.
-// Placeholder text is centred. Icon on the right.
-
-struct SearchBarView: View {
-
-    var body: some View {
-        HStack {
-
-            Spacer()
-
-            // Centred placeholder text
-            Text("Search curiosities...")
-                .font(.system(size: 14, weight: .light))
-                .foregroundColor(Color(hex: "#2C2825").opacity(0.35))
-
-            Spacer()
-
-            // Magnifying glass — right side
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .light))
-                .foregroundColor(Color(hex: "#2C2825").opacity(0.35))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-        .background(Color.white.opacity(0.6))
-        .cornerRadius(28)
-        .overlay(
-            RoundedRectangle(cornerRadius: 28)
-                .stroke(Color(hex: "#2C2825").opacity(0.12), lineWidth: 1)
-        )
-    }
-}
-
-// ─────────────────────────────────────────────
-// MARK: - Daily Direct Section
-// ─────────────────────────────────────────────
-// Section label + date row, then the animated snap carousel.
-
-struct DailyDirectSection: View {
-
-    private var dateString: String {
-        let f = DateFormatter()
-        f.dateFormat = "dd/MM/yyyy"
-        return f.string(from: Date())
-    }
-
-    // Card data: background colour, title, subtitle.
-    // Colours are dark atmospheric tones from the spec.
-    private let cards: [(color: String, imageURL: String, title: String, subtitle: String)] = [
-        (
-            "#1B4D4A",
-            "https://picsum.photos/seed/ocean/400/500",
-            "What did NASA really found in the deep sea?",
-            "Find out why scientists stopped diving deeper to the trench..."
-        ),
-        (
-            "#2C1810",
-            "https://picsum.photos/seed/desert/400/500",
-            "The forgotten cities under the Sahara",
-            "Ancient civilizations buried beneath the sand for centuries..."
-        ),
-        (
-            "#2C2F3A",
-            "https://picsum.photos/seed/dream/400/500",
-            "Why do we dream in other people's voices?",
-            "Scientists still can't explain this strange phenomenon..."
-        ),
-        (
-            "#1A1A2E",
-            "https://picsum.photos/seed/memory/400/500",
-            "The science of déjà vu — why your brain fakes memories",
-            "Researchers finally have a theory for this eerie sensation..."
-        ),
-        (
-            "#1C1C1C",
-            "https://picsum.photos/seed/japan/400/500",
-            "Japan's evaporating people — the Johatsu phenomenon",
-            "Thousands vanish every year completely by choice..."
-        )
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-
-            // Section header: label left, date right
-            HStack(alignment: .firstTextBaseline) {
-                Text("dailydirect")
-                    .font(.custom("InstrumentSerif-Italic", size: 20))
-                    .foregroundColor(Color(hex: "#2C2825"))
-                Spacer()
-                Text(dateString)
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundColor(Color(hex: "#2C2825").opacity(0.5))
-            }
-            .padding(.horizontal, 20)
-
-            // ── Carousel ──────────────────────────────────────────
-            // contentMargins centres the focused card and controls
-            // how much of the side cards peek in.
-            // Using GeometryReader to calculate the exact centre margin
-            // so the focused card is always perfectly centred regardless
-            // of device width.
-            GeometryReader { scrollGeo in
-                let cardWidth: CGFloat = 200
-                // This puts the focused card dead centre.
-                // Side cards peek in by whatever is left: ~(screenWidth - cardWidth)/2 - margin
-                // At 390pt screen: (390-200)/2 = 95pt margin → ~55pt of side card visible.
-                let margin = (scrollGeo.size.width - cardWidth) / 2
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(cards.indices, id: \.self) { index in
-                            DailyCard(
-                                cardColor: cards[index].color,
-                                imageURL: cards[index].imageURL,
-                                title: cards[index].title,
-                                subtitle: cards[index].subtitle
-                            )
-                            .scrollTransition(.animated(.spring(duration: 0.3))) { content, phase in
-                                content
-                                    .scaleEffect(phase.isIdentity ? 1.0 : 0.82)
-                                    // Side cards drop down so their bottom edge
-                                    // aligns with the centre card's bottom edge.
-                                    // The scale makes them shorter by ~18%, so we
-                                    // offset down by roughly that difference.
-                                    .offset(y: phase.isIdentity ? 0 : 22)
-                                    .rotationEffect(
-                                        phase.isIdentity
-                                            ? .degrees(0)
-                                            : phase.value < 0 ? .degrees(-6) : .degrees(6),
-                                        anchor: .bottom
-                                    )
-                                    .opacity(phase.isIdentity ? 1.0 : 0.85)
-                            }
-                        }
-                    }
-                    .scrollTargetLayout()
-                }
-                .scrollTargetBehavior(.viewAligned)
-                .contentMargins(.horizontal, margin, for: .scrollContent)
-                .frame(height: 290)
-            }
-            .frame(height: 290)
-        }
-    }
-}
-
-// ─────────────────────────────────────────────
-// MARK: - Daily Card
-// ─────────────────────────────────────────────
-// A single card. Dark atmospheric fill, gradient overlay, white text.
-// Fixed 200×260pt — the carousel handles scale via scrollTransition.
-
-struct DailyCard: View {
-    let cardColor: String
-    let imageURL: String
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-
-            // ── Background image via AsyncImage ───────────────────
-            // AsyncImage is SwiftUI's built-in URL image loader.
-            // It has three states: loading, success, failure.
-            // While loading, we show the solid colour placeholder.
-            // On success, the image fills the card.
-            AsyncImage(url: URL(string: imageURL)) { phase in
-                switch phase {
-
-                case .empty:
-                    // Still loading — show the colour placeholder.
-                    Color(hex: cardColor)
-
-                case .success(let image):
-                    // Image loaded — fill the card, crop to fit.
-                    image
-                        .resizable()
-                        .scaledToFill()
-
-                case .failure:
-                    // Network error — fall back to colour placeholder.
-                    Color(hex: cardColor)
-
-                @unknown default:
-                    Color(hex: cardColor)
-                }
-            }
-
-            // ── Gradient overlay ──────────────────────────────────
-            // Dark gradient at the bottom keeps white text readable
-            // over any photo content.
-            LinearGradient(
-                colors: [.clear, Color.black.opacity(0.72)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            // ── Text block ────────────────────────────────────────
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title)
-                    .font(.custom("InstrumentSerif-Regular", size: 16))
-                    .foregroundColor(.white)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(subtitle)
-                    .font(.system(size: 12, weight: .light))
-                    .foregroundColor(.white.opacity(0.75))
-                    .lineLimit(2)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
-            .padding(.top, 14)
-        }
-        // frame + clipShape together bound everything to 200×240pt.
-        // clipShape also crops the AsyncImage to the rounded card shape.
-        .frame(width: 200, height: 240)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-    }
-}
-
-// ─────────────────────────────────────────────
-// MARK: - Re:Log Widget
-// ─────────────────────────────────────────────
-// Three parts: stamp label (top right), yellow banner, white stat card.
-
-struct ReLogWidget: View {
-
-    private let topicColors: [Color] = [
-        Color(hex: "#8B7355"),
-        Color(hex: "#6B8B7A"),
-        Color(hex: "#7A6B8B"),
-        Color(hex: "#8B6B6B"),
-        Color(hex: "#6B7A8B")
-    ]
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 8) {
-
-            // ── "re:log" stamp label ──────────────────────────────
-            // White background, dark border — looks like a rubber stamp.
-            // Right-aligned to match the Figma layout.
-            Text("re:log")
-                .font(.custom("InstrumentSerif-Italic", size: 20))
-                .foregroundColor(Color(hex: "#2C2825"))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(Color.white.opacity(0.9))
-                .cornerRadius(6)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(hex: "#2C2825").opacity(0.25), lineWidth: 1)
-                )
-
-            // ── Yellow banner ─────────────────────────────────────
-            // Narrower than full width — 32pt margin each side via padding.
-            // Pill shape, warm yellow fill.
-            Text("Track your rabbit hole journey in re:log")
-                .font(.system(size: 13, weight: .light))
-                .foregroundColor(Color(hex: "#2C2825"))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color(hex: "#F5ECD7"))
-                .cornerRadius(20)
-                // Inset the banner from the widget edges.
-                .padding(.horizontal, 8)
-
-            // ── Stat card ─────────────────────────────────────────
-            // White rounded card. Left column: number stat.
-            // Right column: topic circles + arrow.
-            // A visible divider separates the two columns.
-            HStack(alignment: .top, spacing: 0) {
-
-                // -- Left: dive count ─────────────────────────────
                 VStack(alignment: .leading, spacing: 0) {
+                    HighlighterText(text: "Nadine.", size: 38)
 
-                    Text("You've dived into")
-                        .font(.system(size: 12, weight: .light))
-                        .foregroundColor(Color(hex: "#2C2825").opacity(0.6))
-
-                    // Large thin number — editorial, Instrument Serif.
-                    Text("10")
-                        .font(.custom("InstrumentSerif-Regular", size: 64))
-                        .foregroundColor(Color(hex: "#2C2825"))
-                        .frame(height: 70)
-
-                    Text("topics this week.")
-                        .font(.system(size: 12, weight: .light))
-                        .foregroundColor(Color(hex: "#2C2825").opacity(0.6))
+                    Rectangle()
+                        .fill(Color(hex: "#2C2825").opacity(0.45))
+                        .frame(height: 1.0)
+                        .padding(.horizontal, 6)
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
 
-                // Visible divider line between columns.
-                Rectangle()
-                    .fill(Color(hex: "#2C2825").opacity(0.12))
-                    .frame(width: 1)
-                    .padding(.vertical, 16)
 
-                // -- Right: Top 5 Topics ───────────────────────────
-                VStack(alignment: .center, spacing: 10) {
+    struct SearchBarView: View {
 
-                    // "Top 5 Topics" pill
-                    Text("Top 5 Topics")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(Color(hex: "#2C2825"))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(Color(hex: "#2C2825").opacity(0.07))
-                        .cornerRadius(20)
+        private let seedPlaceholders = [
+            "Search curiosities…",
+            "Abandoned soviet cosmonauts…",
+            "Did Pythagoras really kill over irrationals?",
+            "Why don't we know the deep ocean floor?",
+            "What's actually at the bottom of the Mariana Trench?"
+        ]
 
-                    // Scattered overlapping circles.
-                    // ZStack with manual offsets gives an organic cluster feel.
-                    ZStack {
-                        // Circle 1 — top left
-                        Circle()
-                            .fill(topicColors[0])
-                            .frame(width: 36, height: 36)
-                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                            .offset(x: -22, y: -16)
+        @State private var dummyText: String = ""
 
-                        // Circle 2 — top right
-                        Circle()
-                            .fill(topicColors[1])
-                            .frame(width: 36, height: 36)
-                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                            .offset(x: 10, y: -20)
+        var body: some View {
+            PaperSearchBar(
+                placeholder: "Search curiosities…",
+                text: $dummyText,
+                focused: nil,
+                rotatingPlaceholders: seedPlaceholders,
+                rotationInterval: 6
+            )
+        }
+    }
 
-                        // Circle 3 — centre
-                        Circle()
-                            .fill(topicColors[2])
-                            .frame(width: 36, height: 36)
-                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                            .offset(x: -8, y: 4)
 
-                        // Circle 4 — bottom left
-                        Circle()
-                            .fill(topicColors[3])
-                            .frame(width: 36, height: 36)
-                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                            .offset(x: -26, y: 20)
+    struct DailyDirectSection: View {
 
-                        // Circle 5 — bottom right
-                        Circle()
-                            .fill(topicColors[4])
-                            .frame(width: 36, height: 36)
-                            .overlay(Circle().stroke(Color.white, lineWidth: 2))
-                            .offset(x: 18, y: 16)
+        private var dateString: String {
+            let f = DateFormatter()
+            f.dateFormat = "dd/MM/yyyy"
+            return f.string(from: Date())
+        }
+
+        @State private var activeIndex: Int = 0
+
+        private var cards: [ReDirectTopic] { ReDirectTopicData.topFive }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 6) {
+                SectionHeader(title: "dailydirect", caption: dateString)
+                    .padding(.horizontal, 20)
+
+                GeometryReader { scrollGeo in
+                    let cardWidth: CGFloat = 200
+                    let margin = (scrollGeo.size.width - cardWidth) / 2
+
+                    ZStack(alignment: .bottom) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 2) {
+                                ForEach(Array(cards.enumerated()), id: \.element.id) { index, topic in
+                                    DailyCard(
+                                        cardColor: topic.colorHex,
+                                        imageURL: topic.imageURL,
+                                        title: topic.title,
+                                        subtitle: topic.subtitle
+                                    )
+                                    .scrollTransition(.animated(.spring(duration: 0.3))) { content, phase in
+                                        content
+                                            .scaleEffect(phase.isIdentity ? 1.0 : 0.82)
+                                            .offset(y: phase.isIdentity ? 0 : 22)
+                                            .rotationEffect(
+                                                phase.isIdentity
+                                                ? .degrees(0)
+                                                : phase.value < 0 ? .degrees(-6) : .degrees(6),
+                                                anchor: .bottom
+                                            )
+                                            .opacity(phase.isIdentity ? 1.0 : 0.85)
+                                    }
+                                    .onScrollVisibilityChange(threshold: 0.5) { isVisible in
+                                        if isVisible {
+                                            withAnimation(.spring(duration: 0.35, bounce: 0.2)) {
+                                                activeIndex = index
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .scrollTargetLayout()
+                            .padding(.vertical, 20)
+                        }
+                        .scrollTargetBehavior(.viewAligned)
+                        .contentMargins(.horizontal, margin, for: .scrollContent)
+                        .scrollClipDisabled()
+
+                        CarouselPageIndicator(count: cards.count, activeIndex: activeIndex)
+                            .offset(y: -10)
+                            .allowsHitTesting(false)
                     }
-                    .frame(width: 80, height: 80)
+                    .frame(height: 320 + 28)
+                }
+                .frame(height: 320 + 28)
+            }
+        }
+    }
 
-                    // Arrow button — bottom right of the right column.
-                    HStack {
+
+    struct CarouselPageIndicator: View {
+        let count: Int
+        let activeIndex: Int
+
+        var body: some View {
+            HStack(spacing: 6) {
+                ForEach(0..<count, id: \.self) { index in
+                    let isActive = index == activeIndex
+
+                    if isActive {
+                        Capsule()
+                            .fill(DSColor.ink.opacity(0.65))
+                            .frame(width: 28, height: 8)
+                            .overlay(
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color.white.opacity(0.35), Color.clear],
+                                            startPoint: UnitPoint.top,
+                                            endPoint: UnitPoint.bottom
+                                        )
+                                    )
+                            )
+                            .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
+                            .animation(.spring(duration: 0.35, bounce: 0.2), value: activeIndex)
+                    } else {
+                        Circle()
+                            .fill(Color(hex: "#2C2825").opacity(0.18))
+                            .frame(width: 8, height: 8)
+                            .animation(.spring(duration: 0.35, bounce: 0.2), value: activeIndex)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+        }
+    }
+
+
+    struct DailyCard: View {
+        let cardColor: String
+        let imageURL: String
+        let title: String
+        let subtitle: String
+
+        var body: some View {
+            ZStack(alignment: .bottomLeading) {
+                AsyncImage(url: URL(string: imageURL)) { phase in
+                    switch phase {
+
+                    case .empty:
+                        Color(hex: cardColor)
+
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+
+                    case .failure:
+                        Color(hex: cardColor)
+
+                    @unknown default:
+                        Color(hex: cardColor)
+                    }
+                }
+
+                LinearGradient(
+                    colors: [.clear, Color.black.opacity(0.72)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title)
+                        .font(.custom("InstrumentSerif-Regular", size: 19))
+                        .foregroundColor(.white)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .light))
+                        .foregroundColor(.white.opacity(0.75))
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 28)
+                .padding(.top, 14)
+            }
+            .frame(width: 200, height: 270)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+            }
+            .shadow(color: Color(hex: "#1F1B18").opacity(0.14), radius: 0, x: 1.5, y: 1.5)
+            .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
+        }
+    }
+
+
+    struct ReLogWidget: View {
+
+        private let topicSeeds = ["clouds", "desert", "cosmos", "dusk", "hands"]
+        @State private var appeared = false
+        @State private var isPressed = false
+
+        var body: some View {
+            Button(action: { print("re:log widget tapped") }) {
+                ZStack {
+
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color(hex: "#F5F0E8").opacity(0.88))
+
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(DSColor.ink.opacity(0.38), lineWidth: 1)
+
+                    VStack {
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.45), Color.clear],
+                                    startPoint: UnitPoint.top,
+                                    endPoint: UnitPoint(x: 0.5, y: 0.08)
+                                )
+                            )
+                            .frame(height: 32)
                         Spacer()
-                        Button(action: { print("re:log tapped") }) {
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 13, weight: .regular))
+                    }
+
+                    HStack(alignment: .center, spacing: 0) {
+
+                        VStack(alignment: .leading, spacing: 0) {
+
+                            Text("this week,")
+                                .font(.system(size: 13, weight: .light))
+                                .foregroundColor(Color(hex: "#2C2825").opacity(0.42))
+                                .tracking(0.1)
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 6)
+                                .animation(.smooth.delay(0.18), value: appeared)
+
+                            Spacer().frame(height: 5)
+
+                            Text("your mind\nwandered")
+                                .font(.custom("InstrumentSerif-Italic", size: 27))
                                 .foregroundColor(Color(hex: "#2C2825"))
-                                .frame(width: 30, height: 30)
-                                .background(Color(hex: "#2C2825").opacity(0.07))
+                                .lineSpacing(1)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 10)
+                                .animation(.smooth.delay(0.24), value: appeared)
+
+                            Spacer().frame(height: 8)
+
+                            Text("through 10\nrabbit holes.")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundColor(Color(hex: "#2C2825").opacity(0.72))
+                                .lineSpacing(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .opacity(appeared ? 1 : 0)
+                                .offset(y: appeared ? 0 : 8)
+                                .animation(.smooth.delay(0.30), value: appeared)
+                        }
+                        .padding(.leading, 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        ZStack {
+                            MemoryCircle(seed: topicSeeds[0], size: 56, delay: 0.10)
+                                .offset(x: -28, y: -36)
+                            MemoryCircle(seed: topicSeeds[1], size: 46, delay: 0.16)
+                                .offset(x: 14, y: -42)
+                            MemoryCircle(seed: topicSeeds[2], size: 60, delay: 0.22)
+                                .offset(x: -6, y: 2)
+                            MemoryCircle(seed: topicSeeds[3], size: 48, delay: 0.28)
+                                .offset(x: -36, y: 38)
+                            MemoryCircle(seed: topicSeeds[4], size: 40, delay: 0.34)
+                                .offset(x: 16, y: 34)
+                        }
+                        .frame(width: 120, height: 155)
+                        .padding(.trailing, 48)
+                        .opacity(appeared ? 1 : 0)
+                        .animation(.smooth.delay(0.12), value: appeared)
+                    }
+                    .padding(.vertical, 20)
+
+                    VStack {
+                        HStack {
+                            Spacer()
+                            ChipCapsule(
+                                text: "re:log",
+                                variant: .filled(DSColor.highlightYellow)
+                            )
+                            .opacity(appeared ? 1 : 0)
+                            .scaleEffect(appeared ? 1 : 0.88)
+                            .animation(.spring(duration: 0.4, bounce: 0.15).delay(0.08), value: appeared)
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 13)
+                    .padding(.trailing, 13)
+
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 13, weight: .light))
+                                .foregroundColor(Color(hex: "#2C2825").opacity(0.55))
+                                .frame(width: 44, height: 44)
+                                .background(Color.white.opacity(0.65))
                                 .clipShape(Circle())
+                                .overlay(Circle().stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1))
+                                .shadow(color: .black.opacity(0.04), radius: 4, x: 0, y: 1)
+                                .opacity(appeared ? 1 : 0)
+                                .animation(.smooth.delay(0.38), value: appeared)
+                                .accessibilityLabel("Open re:log")
                         }
                     }
+                    .padding(.bottom, 13)
+                    .padding(.trailing, 13)
                 }
-                .padding(16)
                 .frame(maxWidth: .infinity)
+                .frame(height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .scaleEffect(appeared ? 1.0 : 0.94)
+                .opacity(appeared ? 1.0 : 0)
+                .animation(.smooth.delay(0.05), value: appeared)
+                .scaleEffect(isPressed ? 0.97 : 1.0)
+                .animation(.spring(duration: 0.25, bounce: 0.3), value: isPressed)
+                .shadow(color: .black.opacity(0.07), radius: 14, x: 0, y: 5)
             }
-            .background(Color.white.opacity(0.85))
-            .cornerRadius(16)
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in isPressed = true }
+                    .onEnded   { _ in isPressed = false }
+            )
+            .accessibilityLabel("re:log — your mind wandered through 10 rabbit holes this week. Tap to explore your curiosity trail.")
+            .onAppear {
+                withAnimation { appeared = true }
+            }
         }
     }
-}
 
-// ─────────────────────────────────────────────
-// MARK: - Nav Bar
-// ─────────────────────────────────────────────
-// Floating white pill, 5 icon tabs.
-// First tab has a filled dark circle — selected state.
-// Completely separate from the scroll content.
+    // ─────────────────────────────────────────────
+    // MARK: - Memory Circle
+    // ─────────────────────────────────────────────
 
-struct NavBar: View {
+    struct MemoryCircle: View {
+        let seed: String
+        let size: CGFloat
+        let delay: Double
 
-    private let icons = [
-        "leaf.fill",
-        "clock.fill",
-        "hourglass",
-        "waveform.path.ecg",
-        "gearshape.fill"
-    ]
+        @State private var appeared = false
+        @State private var isFloating = false
 
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(icons.indices, id: \.self) { index in
-                ZStack {
-                    // Dark circle behind the selected (first) tab only.
-                    if index == 0 {
-                        Circle()
-                            .fill(Color(hex: "#2C2825"))
-                            .frame(width: 44, height: 44)
-                    }
+        private var floatAmount: CGFloat { (size - 40) * 0.18 + 1.5 }
+        private var floatDuration: Double { 3.0 + Double(size) * 0.04 }
 
-                    Image(systemName: icons[index])
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundColor(
-                            index == 0
+        var body: some View {
+            AsyncImage(url: URL(string: "https://picsum.photos/seed/\(seed)/120/120")) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                case .empty, .failure:
+                    Circle().fill(Color(hex: "#C8C2BA").opacity(0.5))
+                @unknown default:
+                    Circle().fill(Color(hex: "#C8C2BA").opacity(0.5))
+                }
+            }
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 2.5))
+            .shadow(color: .black.opacity(0.08), radius: 5, x: 0, y: 2)
+            .scaleEffect(appeared ? 1.0 : 0.3)
+            .opacity(appeared ? 1.0 : 0)
+            .animation(.spring(duration: 0.5, bounce: 0.3).delay(delay), value: appeared)
+            .offset(y: isFloating ? -floatAmount : floatAmount)
+            .animation(
+                .easeInOut(duration: floatDuration)
+                .repeatForever(autoreverses: true)
+                .delay(delay * 0.5),
+                value: isFloating
+            )
+            .onAppear { appeared = true; isFloating = true }
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // MARK: - Legacy Components
+    // ─────────────────────────────────────────────
+
+    struct ConstellationBubble: View {
+        let seed: String; let size: CGFloat; let delay: Double
+        @State private var isFloating = false
+        private var floatAmount: CGFloat { (size - 36) * 0.25 + 1.5 }
+        private var floatDuration: Double { 2.6 + Double(size) * 0.045 }
+        var body: some View {
+            AsyncImage(url: URL(string: "https://picsum.photos/seed/\(seed)/80/80")) { phase in
+                switch phase {
+                case .success(let image): image.resizable().scaledToFill()
+                case .empty, .failure: Circle().fill(Color(hex: "#D4CEC8").opacity(0.55))
+                @unknown default: Circle().fill(Color(hex: "#D4CEC8").opacity(0.55))
+                }
+            }
+            .frame(width: size, height: size).clipShape(Circle())
+            .overlay(Circle().stroke(Color.white, lineWidth: 2.5))
+            .shadow(color: .black.opacity(0.09), radius: 5, x: 0, y: 2)
+            .offset(y: isFloating ? -floatAmount : floatAmount)
+            .animation(.easeInOut(duration: floatDuration).repeatForever(autoreverses: true).delay(delay), value: isFloating)
+            .onAppear { isFloating = true }
+        }
+    }
+
+    struct TopicCircle: View {
+        let seed: String
+        var body: some View {
+            AsyncImage(url: URL(string: "https://picsum.photos/seed/\(seed)/80/80")) { phase in
+                switch phase {
+                case .success(let image): image.resizable().scaledToFill()
+                case .empty, .failure: Circle().fill(Color(hex: "#C0B8B0").opacity(0.5))
+                @unknown default: Circle().fill(Color(hex: "#C0B8B0").opacity(0.5))
+                }
+            }
+            .frame(width: 44, height: 44).clipShape(Circle())
+            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            .shadow(color: Color.black.opacity(0.08), radius: 3, x: 0, y: 1)
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // MARK: - Nav Bar
+    // ─────────────────────────────────────────────
+
+    struct NavBar: View {
+
+        private let icons = [
+            "leaf.fill",
+            "clock.fill",
+            "hourglass",
+            "waveform.path.ecg",
+            "gearshape.fill"
+        ]
+
+        var body: some View {
+            HStack(spacing: 0) {
+                ForEach(icons.indices, id: \.self) { index in
+                    ZStack {
+                        if index == 0 {
+                            Circle()
+                                .fill(Color(hex: "#2C2825"))
+                                .frame(width: 44, height: 44)
+                        }
+
+                        Image(systemName: icons[index])
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundColor(
+                                index == 0
                                 ? .white
-                                : Color(hex: "#2C2825").opacity(0.45)
-                        )
+                                : Color(hex: "#2C2825").opacity(0.4)
+                            )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
             }
-        }
-        .padding(.horizontal, 8)
-        .background(Color.white.opacity(0.95))
-        .cornerRadius(40)
-        .shadow(color: Color.black.opacity(0.08), radius: 14, x: 0, y: 4)
-    }
-}
-
-// ─────────────────────────────────────────────
-// MARK: - Dashboard Grain
-// ─────────────────────────────────────────────
-// Coarse film grain — same parameters as OnboardingView.
-// Renamed struct to avoid conflicts with OnboardingView's grain.
-
-struct DashboardGrain: View {
-    var body: some View {
-        Canvas { context, size in
-            var rng = DashboardRNG(seed: 42)
-            for _ in 0..<1800 {
-                let x       = CGFloat.random(in: 0...size.width,  using: &rng)
-                let y       = CGFloat.random(in: 0...size.height, using: &rng)
-                let radius  = CGFloat.random(in: 1.0...2.5,       using: &rng)
-                let opacity = Double.random(in: 0.06...0.18,      using: &rng)
-                context.fill(
-                    Path(ellipseIn: CGRect(x: x, y: y, width: radius, height: radius)),
-                    with: .color(Color.black.opacity(opacity))
-                )
-            }
+            .padding(.horizontal, 8)
+            .background(.ultraThinMaterial)
+            .cornerRadius(40)
+            .overlay(
+                Capsule()
+                    .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.07), radius: 16, x: 0, y: 4)
         }
     }
-}
 
-struct DashboardRNG: RandomNumberGenerator {
-    private var state: UInt64
-    init(seed: UInt64) { self.state = seed }
-    mutating func next() -> UInt64 {
-        state ^= state << 13
-        state ^= state >> 7
-        state ^= state << 17
-        return state
+    // ─────────────────────────────────────────────
+    // MARK: - Dashboard Grain
+    // ─────────────────────────────────────────────
+
+    struct DashboardGrain: View {
+        var body: some View {
+            Canvas { context, size in
+                var rng = DashboardRNG(seed: 42)
+                for _ in 0..<1800 {
+                    let x       = CGFloat.random(in: 0...size.width,  using: &rng)
+                    let y       = CGFloat.random(in: 0...size.height, using: &rng)
+                    let radius  = CGFloat.random(in: 1.0...2.5,       using: &rng)
+                    let opacity = Double.random(in: 0.06...0.18,      using: &rng)
+                    context.fill(
+                        Path(ellipseIn: CGRect(x: x, y: y, width: radius, height: radius)),
+                        with: .color(Color.black.opacity(opacity))
+                    )
+                }
+            }
+        }
     }
-}
 
-// ─────────────────────────────────────────────
-// MARK: - Preview
-// ─────────────────────────────────────────────
+    struct DashboardRNG: RandomNumberGenerator {
+        private var state: UInt64
+        init(seed: UInt64) { self.state = seed }
+        mutating func next() -> UInt64 {
+            state ^= state << 13
+            state ^= state >> 7
+            state ^= state << 17
+            return state
+        }
+    }
 
 #Preview {
     DashboardView()

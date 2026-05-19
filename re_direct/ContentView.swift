@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  re_direct
-//
-//  Created by nadine on 17/5/26.
-//
-
 import SwiftUI
 import SwiftData
 
