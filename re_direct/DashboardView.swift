@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct DashboardView: View {
 
@@ -99,8 +100,36 @@ struct DashboardView: View {
         }
 
         @State private var activeIndex: Int = 0
+        @Query(sort: \CuriosityTopic.slug) private var seededTopics: [CuriosityTopic]
 
-        private var cards: [ReDirectTopic] { ReDirectTopicData.topFive }
+        private var cards: [ReDirectTopic] {
+            guard !seededTopics.isEmpty else { return ReDirectTopicData.topFive }
+            return seededTopics.enumerated().map { offset, topic in
+                Self.adapt(topic: topic, indexedAt: offset)
+            }
+        }
+
+        private static func adapt(topic: CuriosityTopic, indexedAt index: Int) -> ReDirectTopic {
+            let fallback = ReDirectTopicData.topFive[index % ReDirectTopicData.topFive.count]
+            let firstPrompt = (topic.prompts ?? []).min { $0.slug < $1.slug }
+            let subtitle = firstPrompt?.body.isEmpty == false
+                ? firstPrompt!.body
+                : topic.summary
+            let color = topic.accentColorHex.isEmpty ? fallback.colorHex : topic.accentColorHex
+            return ReDirectTopic(
+                id: index,
+                title: topic.title,
+                subtitle: subtitle,
+                imageURL: fallback.imageURL,
+                colorHex: color,
+                barHeight: fallback.barHeight,
+                barColorHex: fallback.barColorHex,
+                articleCount: 0,
+                videoCount: 0,
+                totalTime: "",
+                platformStats: []
+            )
+        }
 
         var body: some View {
             VStack(alignment: .leading, spacing: 6) {
