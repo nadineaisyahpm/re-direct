@@ -419,3 +419,15 @@ Do not act as:
 - someone who ignores Figma
 
 When uncertain, ask. When clear, execute surgically.
+
+## 16. Git Workflow
+
+All commit, staging, and push behavior is governed by [`docs/GIT_WORKFLOW.md`](../docs/GIT_WORKFLOW.md). Read it before staging or committing.
+
+Key points (see the doc for the full policy):
+
+- Commit only when the change is inside approved scope, build is green, and the diff is coherent.
+- Stage task-related files only. Leave unrelated changes unstaged and mention them.
+- Commit messages use a concise imperative subject; body only when needed. No trailer lines or co-author tags unless the user explicitly asks.
+- Never push, force-push, or bypass hooks unless the user explicitly requests it.
+- Prefer non-destructive operations; avoid `reset --hard`, `clean -f`, `branch -D`, and amends of pushed commits.
