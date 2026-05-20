@@ -118,6 +118,16 @@ struct RetualsView: View {
         return RedirectRitual.samples.firstIndex { $0.id == slug }
     }
 
+    /// Resolve the lane corresponding to the active method slug. Falls back
+    /// to the first sample when no method has been written to the store.
+    /// re:tuals does **not** write back to the store; this resolver only reads.
+    private func ritualForActive(slug: String?) -> RedirectRitual {
+        if let slug, let match = RedirectRitual.samples.first(where: { $0.id == slug }) {
+            return match
+        }
+        return RedirectRitual.samples[0]
+    }
+
     private let swipeThreshold: CGFloat = 90
 
     private var activeRitualIndex: Int {
@@ -206,15 +216,6 @@ struct RetualsView: View {
 
                         DeckControls(
                             onShuffle: { sendTopCardToBack(direction: -1) },
-                            onChoose: {
-                                isFlipped = false
-                                flipAngle = 0
-                                if let top = rituals.first {
-                                    withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
-                                        selectedRitual = top
-                                    }
-                                }
-                            },
                             onNext: { sendTopCardToBack(direction: 1) }
                         )
                         .padding(.top, 12)
@@ -229,8 +230,16 @@ struct RetualsView: View {
                 }
             }
             .ignoresSafeArea()
-            .onChange(of: rituals.first?.id) { _, _ in
-                selectedRitual = rituals.first
+            .task {
+                // Initial sync from the shared store on first appear.
+                selectedRitual = ritualForActive(slug: activeMethodStore.activeRedirectMethodSlug)
+            }
+            .onChange(of: activeMethodStore.activeRedirectMethodSlug) { _, newSlug in
+                // WhenTimerEndsCard follows the Timer-active method, not the
+                // deck-front card. Browsing the deck does not change WTE.
+                withAnimation(.smooth) {
+                    selectedRitual = ritualForActive(slug: newSlug)
+                }
             }
         }
         .preferredColorScheme(.light)
@@ -762,7 +771,6 @@ struct RitualThumbnail: View {
 
 struct DeckControls: View {
     let onShuffle: () -> Void
-    let onChoose: () -> Void
     let onNext: () -> Void
 
     var body: some View {
@@ -785,25 +793,6 @@ struct DeckControls: View {
                     }
             }
             .buttonStyle(PaperCircleButtonStyle())
-
-            Spacer()
-
-            Button(action: onChoose) {
-                Text("choose this")
-                    .font(.custom("InstrumentSerif-Italic", size: 16))
-                    .foregroundColor(Color(hex: "#1F1B18").opacity(0.78))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background {
-                        Capsule()
-                            .fill(Color(hex: "#FFFDF2").opacity(0.6))
-                            .overlay {
-                                Capsule()
-                                    .stroke(Color(hex: "#1F1B18").opacity(0.22), lineWidth: 0.5)
-                            }
-                    }
-            }
-            .buttonStyle(ScaleButtonStyle(scale: 0.96))
 
             Spacer()
 
