@@ -104,6 +104,7 @@ struct RetualsView: View {
     @State private var selectedRitual: RedirectRitual? = RedirectRitual.samples.first
     @State private var dragOffset: CGSize           = .zero
     @State private var isAnimatingOut               = false
+    @State private var isFlipped                    = false
 
     private let swipeThreshold: CGFloat = 90
 
@@ -114,6 +115,7 @@ struct RetualsView: View {
 
     private func bringRitualToFront(_ index: Int) {
         guard RedirectRitual.samples.indices.contains(index) else { return }
+        isFlipped = false
         let samples = RedirectRitual.samples
         let reordered = Array(samples[index...]) + Array(samples[..<index])
         withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
@@ -124,6 +126,7 @@ struct RetualsView: View {
 
     private func sendTopCardToBack(direction: CGFloat) {
         guard !rituals.isEmpty else { return }
+        isFlipped = false
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             dragOffset = CGSize(width: direction * 600, height: 40)
             isAnimatingOut = true
@@ -171,6 +174,7 @@ struct RetualsView: View {
                             rituals: $rituals,
                             dragOffset: $dragOffset,
                             isAnimatingOut: $isAnimatingOut,
+                            isFlipped: $isFlipped,
                             swipeThreshold: swipeThreshold,
                             onSwipe: sendTopCardToBack
                         )
@@ -187,6 +191,7 @@ struct RetualsView: View {
                         DeckControls(
                             onShuffle: { sendTopCardToBack(direction: -1) },
                             onChoose: {
+                                isFlipped = false
                                 if let top = rituals.first {
                                     withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
                                         selectedRitual = top
@@ -333,6 +338,7 @@ struct RitualDeck: View {
     @Binding var rituals: [RedirectRitual]
     @Binding var dragOffset: CGSize
     @Binding var isAnimatingOut: Bool
+    @Binding var isFlipped: Bool
     let swipeThreshold: CGFloat
     let onSwipe: (CGFloat) -> Void
 
@@ -376,18 +382,12 @@ struct RitualDeck: View {
 
             ForEach(indexedRituals, id: \.element.id) { index, ritual in
                 if index == 0 {
-                    RitualSwipeCard(ritual: ritual)
-                        .scaleEffect(CGFloat(dynamicScale))
-                        .offset(x: dragOffset.width, y: dragOffset.height * 0.25 + CGFloat(lift))
-                        .rotationEffect(.degrees(Double(dragOffset.width) / 18.0))
-                        .zIndex(3)
-                        .gesture(dragGesture)
-                        .shadow(
-                            color: .black.opacity(dynamicShadowOpacity),
-                            radius: dynamicShadowRadius,
-                            x: 0, y: dynamicShadowY
-                        )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+                    frontCard(ritual: ritual,
+                              dynamicScale: dynamicScale,
+                              lift: lift,
+                              dynamicShadowOpacity: dynamicShadowOpacity,
+                              dynamicShadowRadius: dynamicShadowRadius,
+                              dynamicShadowY: dynamicShadowY)
                 } else {
                     let backScale = 1.0 - CGFloat(index) * 0.025
                         + (index == 1 ? CGFloat(dragProgress) * 0.018 : 0)
@@ -406,6 +406,51 @@ struct RitualDeck: View {
         }
         .animation(.spring(response: 0.42, dampingFraction: 0.88), value: rituals.first?.id)
         .sensoryFeedback(.impact(weight: .medium), trigger: rituals.first?.id)
+    }
+
+    @ViewBuilder
+    private func frontCard(ritual: RedirectRitual,
+                           dynamicScale: Double,
+                           lift: Double,
+                           dynamicShadowOpacity: Double,
+                           dynamicShadowRadius: Double,
+                           dynamicShadowY: Double) -> some View {
+
+        let card = ZStack {
+            RitualSwipeCard(ritual: ritual)
+                .opacity(isFlipped ? 0 : 1)
+
+            RitualBackFaceCard(ritual: ritual)
+                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                .opacity(isFlipped ? 1 : 0)
+        }
+        .rotation3DEffect(
+            .degrees(isFlipped ? 180 : 0),
+            axis: (x: 0, y: 1, z: 0),
+            perspective: 0.5
+        )
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: isFlipped)
+        .scaleEffect(CGFloat(dynamicScale))
+        .offset(x: dragOffset.width, y: dragOffset.height * 0.25 + CGFloat(lift))
+        .rotationEffect(.degrees(Double(dragOffset.width) / 18.0))
+        .zIndex(3)
+        .shadow(
+            color: .black.opacity(dynamicShadowOpacity),
+            radius: dynamicShadowRadius,
+            x: 0, y: dynamicShadowY
+        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+        .onTapGesture {
+            isFlipped.toggle()
+        }
+
+        // Split-branch the drag gesture per CLAUDE.md (avoid conditional nil gesture).
+        // Drag is only attached when the card is showing its front face.
+        if isFlipped {
+            card
+        } else {
+            card.gesture(dragGesture)
+        }
     }
 }
 
@@ -986,6 +1031,65 @@ struct RetualsRNG: RandomNumberGenerator {
         state ^= state >> 7
         state ^= state << 17
         return state
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Ritual Back Face (empty state)
+// ─────────────────────────────────────────────
+
+/// Back face of a re:tuals card. Renders a universal empty-state for the lane.
+/// Per-method engagement rows arrive in a later slice; this is the shell only.
+struct RitualBackFaceCard: View {
+    let ritual: RedirectRitual
+
+    private var usesLightText: Bool {
+        ["#B8A8B0", "#1B4D4A", "#2C2F3A"].contains(ritual.cardHex)
+    }
+
+    private var textColor: Color {
+        usesLightText
+            ? Color(hex: "#FFF8EC").opacity(0.94)
+            : Color(hex: "#2C2825").opacity(0.82)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Spacer(minLength: 0)
+
+            Text("no rabbit holes here yet —")
+                .font(.custom("InstrumentSerif-Italic", size: 22))
+                .foregroundColor(textColor)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("the next one starts a memory.")
+                .font(.system(size: 13, weight: .light))
+                .foregroundColor(textColor.opacity(0.72))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 10, weight: .light))
+                Text("tap to flip back")
+                    .font(.custom("InstrumentSerif-Italic", size: 12))
+            }
+            .foregroundColor(textColor.opacity(0.55))
+            .padding(.bottom, 22)
+        }
+        .padding(.horizontal, 28)
+        .frame(width: 300, height: 370)
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(hex: ritual.cardHex))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+                }
+        }
     }
 }
 
