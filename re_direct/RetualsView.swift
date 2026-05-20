@@ -344,6 +344,7 @@ struct RitualDeck: View {
     let onSwipe: (CGFloat) -> Void
 
     @State private var isDragging = false
+    @State private var flipAngle: Double = 0
 
     private var dragGesture: some Gesture {
         DragGesture()
@@ -430,20 +431,24 @@ struct RitualDeck: View {
                            dynamicShadowRadius: Double,
                            dynamicShadowY: Double) -> some View {
 
+        // True 3D card turn: face visibility is derived from the live rotation
+        // angle, not from the `isFlipped` Bool. Opacity steps at exactly 90°
+        // and is held outside the animation context so the swap is instant.
         let card = ZStack {
             RitualSwipeCard(ritual: ritual)
-                .opacity(isFlipped ? 0 : 1)
+                .opacity(flipAngle < 90 ? 1 : 0)
+                .animation(nil, value: flipAngle < 90)
 
             RitualBackFaceCard(ritual: ritual)
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                .opacity(isFlipped ? 1 : 0)
+                .opacity(flipAngle >= 90 ? 1 : 0)
+                .animation(nil, value: flipAngle >= 90)
         }
         .rotation3DEffect(
-            .degrees(isFlipped ? 180 : 0),
+            .degrees(flipAngle),
             axis: (x: 0, y: 1, z: 0),
-            perspective: 0.5
+            perspective: 0.7
         )
-        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: isFlipped)
         .scaleEffect(CGFloat(dynamicScale))
         .offset(x: dragOffset.width, y: dragOffset.height * 0.25 + CGFloat(lift))
         .rotationEffect(.degrees(Double(dragOffset.width) / 18.0))
@@ -508,6 +513,11 @@ struct RitualDeck: View {
         }
         .onTapGesture {
             isFlipped.toggle()
+        }
+        .onChange(of: isFlipped) { _, newValue in
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                flipAngle = newValue ? 180 : 0
+            }
         }
 
         // Split-branch the drag gesture per CLAUDE.md (avoid conditional nil gesture).
