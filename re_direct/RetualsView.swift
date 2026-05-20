@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // ─────────────────────────────────────────────
 // MARK: - Data Models
@@ -1038,10 +1039,23 @@ struct RetualsRNG: RandomNumberGenerator {
 // MARK: - Ritual Back Face (empty state)
 // ─────────────────────────────────────────────
 
-/// Back face of a re:tuals card. Renders a universal empty-state for the lane.
-/// Per-method engagement rows arrive in a later slice; this is the shell only.
+/// Back face of a re:tuals card. Shows up to 5 recent CuriosityEngagement rows
+/// for this lane, or the universal empty-state copy when none exist.
 struct RitualBackFaceCard: View {
     let ritual: RedirectRitual
+    @Query private var engagements: [CuriosityEngagement]
+
+    init(ritual: RedirectRitual) {
+        self.ritual = ritual
+        let slug = ritual.id
+        _engagements = Query(
+            filter: #Predicate<CuriosityEngagement> {
+                $0.methodSlug == slug && $0.deletedAt == nil
+            },
+            sort: \.engagedAt,
+            order: .reverse
+        )
+    }
 
     private var usesLightText: Bool {
         ["#B8A8B0", "#1B4D4A", "#2C2F3A"].contains(ritual.cardHex)
@@ -1053,7 +1067,30 @@ struct RitualBackFaceCard: View {
             : Color(hex: "#2C2825").opacity(0.82)
     }
 
+    private var visibleRows: [CuriosityEngagement] {
+        Array(engagements.prefix(5))
+    }
+
     var body: some View {
+        Group {
+            if engagements.isEmpty {
+                emptyState
+            } else {
+                populatedState
+            }
+        }
+        .frame(width: 300, height: 370)
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(hex: ritual.cardHex))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+                }
+        }
+    }
+
+    private var emptyState: some View {
         VStack(spacing: 10) {
             Spacer(minLength: 0)
 
@@ -1071,25 +1108,118 @@ struct RitualBackFaceCard: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 5) {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 10, weight: .light))
-                Text("tap to flip back")
-                    .font(.custom("InstrumentSerif-Italic", size: 12))
-            }
-            .foregroundColor(textColor.opacity(0.55))
-            .padding(.bottom, 22)
+            flipBackHint
+                .padding(.bottom, 22)
         }
         .padding(.horizontal, 28)
-        .frame(width: 300, height: 370)
-        .background {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(hex: ritual.cardHex))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+    }
+
+    private var populatedState: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            Text("recent rabbit holes")
+                .font(.custom("InstrumentSerif-Italic", size: 15))
+                .foregroundColor(textColor.opacity(0.78))
+                .padding(.bottom, 8)
+
+            Rectangle()
+                .fill(textColor.opacity(0.22))
+                .frame(height: 0.5)
+                .padding(.bottom, 14)
+
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(visibleRows, id: \.id) { row in
+                    engagementRow(row)
                 }
+            }
+
+            Spacer(minLength: 0)
+
+            HStack {
+                Spacer()
+                flipBackHint
+                Spacer()
+            }
+            .padding(.bottom, 4)
         }
+        .padding(.horizontal, 22)
+        .padding(.top, 22)
+        .padding(.bottom, 18)
+    }
+
+    @ViewBuilder
+    private func engagementRow(_ engagement: CuriosityEngagement) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(engagement.contentTitle)
+                .font(.custom("InstrumentSerif-Italic", size: 16))
+                .foregroundColor(textColor)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(EngagementCaption.caption(for: engagement))
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(textColor.opacity(0.58))
+        }
+    }
+
+    private var flipBackHint: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "arrow.uturn.backward")
+                .font(.system(size: 10, weight: .light))
+            Text("tap to flip back")
+                .font(.custom("InstrumentSerif-Italic", size: 12))
+        }
+        .foregroundColor(textColor.opacity(0.55))
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Engagement Caption (testable helpers)
+// ─────────────────────────────────────────────
+
+/// Pure helpers for rendering CuriosityEngagement row captions on the back face.
+/// Extracted so the relative-date and duration formatting can be unit-tested.
+enum EngagementCaption {
+
+    static func caption(
+        for engagement: CuriosityEngagement,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> String {
+        let date = relativeDate(engagement.engagedAt, now: now, calendar: calendar)
+        if let duration = durationText(engagement.durationSeconds) {
+            return "\(date) · \(duration)"
+        }
+        return date
+    }
+
+    static func relativeDate(
+        _ date: Date,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> String {
+        if calendar.isDate(date, inSameDayAs: now) { return "earlier today" }
+
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now))
+        if let y = yesterday, calendar.isDate(date, inSameDayAs: y) { return "yesterday" }
+
+        let daysAgo = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: date),
+            to: calendar.startOfDay(for: now)
+        ).day ?? 0
+
+        if daysAgo <= 0 { return "earlier today" }
+        if daysAgo <= 6 { return "\(daysAgo) days ago" }
+        if daysAgo <= 13 { return "last week" }
+        return "\(daysAgo) days ago"
+    }
+
+    static func durationText(_ seconds: Int?) -> String? {
+        guard let s = seconds, s > 0 else { return nil }
+        let minutes = Int((Double(s) / 60.0).rounded())
+        return "\(max(1, minutes)) min"
     }
 }
 
