@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 struct AICacheKey: Hashable, Sendable {
     let interests: [String]
@@ -23,6 +24,29 @@ struct AICacheHit: Equatable, Sendable {
     let provider: String
     let modelVersion: String
     let createdAt: Date
+}
+
+extension AICacheKey {
+    /// SHA-256 of canonical JSON of the normalized key. Local-only — never transmitted.
+    var localFingerprint: String {
+        struct Canonical: Encodable {
+            let interests: [String]
+            let mood: String?
+            let timeAvailableMinutes: Int
+            let locale: String
+        }
+        let canonical = Canonical(
+            interests: interests,
+            mood: mood,
+            timeAvailableMinutes: timeAvailableMinutes,
+            locale: locale
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let data = (try? encoder.encode(canonical)) ?? Data()
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
 }
 
 protocol AIRecommendationCache: Sendable {

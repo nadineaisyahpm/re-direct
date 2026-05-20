@@ -5,6 +5,9 @@ import SwiftData
 final class AIRecommendation {
     @Attribute(.unique) var id: UUID = UUID()
     var promptInputHash: String = ""
+    var localInputFingerprint: String = ""
+    var topicTitleSnapshot: String = ""
+    var topicSlugSnapshot: String? = nil
     var body: String = ""
     var suggestedMinutes: Int = 10
     var provider: String = ""
