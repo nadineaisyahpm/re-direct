@@ -103,7 +103,7 @@ struct TimerView: View {
 
     @State private var selectedHours: Int   = 0
     @State private var selectedMinutes: Int = 45
-    @State private var selectedMethods: Set<TimerRedirectMethod> = [.watch, .read]
+    @State private var selectedMethod: TimerRedirectMethod = .watch
 
     @State private var selectedApps: [TrackedApp] = [
         TrackedApp(id: "instagram", name: "Instagram", iconName: nil, colorHex: "#E1306C"),
@@ -193,7 +193,7 @@ struct TimerView: View {
                         .padding(.horizontal, 24)
                         .padding(.top, 20)
 
-                        MethodSelector(selectedMethods: $selectedMethods)
+                        MethodSelector(selectedMethod: $selectedMethod)
                             .padding(.horizontal, 24)
                             .padding(.top, 10)
 
@@ -368,7 +368,7 @@ struct TimerPickerCard<Content: View>: View {
 // ─────────────────────────────────────────────
 
 struct MethodSelector: View {
-    @Binding var selectedMethods: Set<TimerRedirectMethod>
+    @Binding var selectedMethod: TimerRedirectMethod
     @Query private var seededMethods: [RedirectMethod]
     @Environment(ActiveMethodStore.self) private var activeMethodStore
 
@@ -406,28 +406,19 @@ struct MethodSelector: View {
     var body: some View {
         VStack(spacing: 8) {
             ForEach(TimerRedirectMethod.allCases) { method in
-                let isSelected = selectedMethods.contains(method)
+                let isSelected = selectedMethod == method
                 let base = cardColor(for: method)
                 let lightText = usesLightText(method)
                 let labelColor: Color = isSelected && lightText ? .white.opacity(0.92) : DSColor.ink
 
                 Button(action: {
-                    let wasSelected = isSelected
+                    // Single-select: tapping a method replaces the previous
+                    // selection. Tapping the already-selected method is a no-op.
                     let methodSlug = slug(for: method)
                     withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
-                        if wasSelected { selectedMethods.remove(method) }
-                        else           { selectedMethods.insert(method) }
+                        selectedMethod = method
                     }
-                    // Single-active-method rule:
-                    // - toggle ON → this method becomes the active redirect method
-                    // - toggle OFF → if it was the active one, clear; otherwise no change
-                    if wasSelected {
-                        if activeMethodStore.activeRedirectMethodSlug == methodSlug {
-                            activeMethodStore.activeRedirectMethodSlug = nil
-                        }
-                    } else {
-                        activeMethodStore.activeRedirectMethodSlug = methodSlug
-                    }
+                    activeMethodStore.activeRedirectMethodSlug = methodSlug
                 }) {
                     HStack(spacing: 12) {
                         if isSelected {
@@ -500,6 +491,13 @@ struct MethodSelector: View {
                 }
                 .buttonStyle(TactileButtonStyle())
             }
+        }
+        .onAppear {
+            // Sync the default selection into the shared store on first appear,
+            // so re:tuals reflects "watch" (or whatever is selected) even
+            // before the user actively taps a chip. Idempotent and safe to
+            // overwrite — the user always sees one method selected.
+            activeMethodStore.activeRedirectMethodSlug = slug(for: selectedMethod)
         }
     }
 }
