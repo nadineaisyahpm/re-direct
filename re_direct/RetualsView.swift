@@ -25,12 +25,17 @@ struct RedirectRitual: Identifiable, Hashable {
     let accentHex: String
     let thumbnailSeeds: [String]
 
+    // Each entry represents a redirect method lane, identified by its
+    // canonical slug. The local enum names (RedirectRitual / RedirectRitualType)
+    // predate the corrected re:tuals semantics — they stay for now because
+    // renaming would ripple beyond this slice. A future flip-flow slice can
+    // align the types.
     static let samples: [RedirectRitual] = [
         RedirectRitual(
-            id: "watch1",
-            label: "Continue Watching...",
-            title: "Videos you left halfway",
-            description: "Let us help you get back to videos you've watched but yet to continue, or recommend more videos similar to topics you're interested in lately.",
+            id: "watch",
+            label: "Watch",
+            title: "Watch",
+            description: "Longer videos you actually finish.",
             type: .watch,
             estimatedMinutes: 12,
             mood: "curious",
@@ -39,10 +44,10 @@ struct RedirectRitual: Identifiable, Hashable {
             thumbnailSeeds: ["capitol","film"]
         ),
         RedirectRitual(
-            id: "read1",
-            label: "Read this next",
-            title: "Read One Strange Article",
-            description: "A short curiosity detour instead of another scroll loop. One article, one rabbit hole, intentionally chosen.",
+            id: "read",
+            label: "Read",
+            title: "Read",
+            description: "One article, intentionally chosen.",
             type: .read,
             estimatedMinutes: 7,
             mood: "calm",
@@ -51,10 +56,10 @@ struct RedirectRitual: Identifiable, Hashable {
             thumbnailSeeds: ["library","desert"]
         ),
         RedirectRitual(
-            id: "game1",
-            label: "Mini Logic Reset",
-            title: "Three-Minute Puzzle",
-            description: "A three-minute puzzle to pull your attention back from the scroll loop and into something that requires real focus.",
+            id: "mini-game",
+            label: "Mini Game",
+            title: "Mini Game",
+            description: "A three-minute puzzle to reset attention.",
             type: .miniGame,
             estimatedMinutes: 3,
             mood: "focused",
@@ -63,10 +68,10 @@ struct RedirectRitual: Identifiable, Hashable {
             thumbnailSeeds: ["puzzle","geometry"]
         ),
         RedirectRitual(
-            id: "deep1",
-            label: "Deep Dive Trail",
-            title: "Continue a Topic You Started",
-            description: "Pick up where you left off on a topic you've been exploring. Re:direct remembers your rabbit holes.",
+            id: "deep-dive",
+            label: "Deep Dive",
+            title: "Deep Dive",
+            description: "Pick up a thread you already started.",
             type: .deepDive,
             estimatedMinutes: 20,
             mood: "immersive",
@@ -75,10 +80,10 @@ struct RedirectRitual: Identifiable, Hashable {
             thumbnailSeeds: ["cosmos","ocean"]
         ),
         RedirectRitual(
-            id: "reflect1",
-            label: "Reflect Briefly",
-            title: "Write One Line Before Going Back",
-            description: "One sentence. What were you actually looking for? This tiny pause changes everything.",
+            id: "reflect",
+            label: "Reflect",
+            title: "Reflect",
+            description: "Two minutes, one question, no algorithm.",
             type: .reflect,
             estimatedMinutes: 2,
             mood: "still",
