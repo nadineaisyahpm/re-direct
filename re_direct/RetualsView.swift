@@ -409,6 +409,19 @@ struct RitualDeck: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: rituals.first?.id)
     }
 
+    /// Envelope of motion values driven by `keyframeAnimator` on each flip.
+    /// Idle = all values neutral. The keyframe arc rises at the midpoint of
+    /// the flip and returns to idle, so both flip-out and flip-back get the
+    /// same tactile envelope without direction-aware logic.
+    private struct FlipMotion {
+        var scale: Double = 1.0
+        var lift: Double = 0.0
+        var shadowSwell: Double = 0.0
+        var shadowRadiusSwell: Double = 0.0
+        var shadowYSwell: Double = 0.0
+        var shineOpacity: Double = 0.0
+    }
+
     @ViewBuilder
     private func frontCard(ritual: RedirectRitual,
                            dynamicScale: Double,
@@ -441,6 +454,58 @@ struct RitualDeck: View {
             x: 0, y: dynamicShadowY
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+        .keyframeAnimator(initialValue: FlipMotion(), trigger: isFlipped) { content, value in
+            content
+                .scaleEffect(CGFloat(value.scale))
+                .offset(y: CGFloat(value.lift))
+                .shadow(
+                    color: .black.opacity(value.shadowSwell),
+                    radius: CGFloat(value.shadowRadiusSwell),
+                    x: 0,
+                    y: CGFloat(value.shadowYSwell)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    Color.white.opacity(0.45),
+                                    Color.clear
+                                ],
+                                startPoint: UnitPoint(x: 0.38, y: 0.5),
+                                endPoint: UnitPoint(x: 0.62, y: 0.5)
+                            )
+                        )
+                        .opacity(value.shineOpacity)
+                        .allowsHitTesting(false)
+                }
+        } keyframes: { _ in
+            KeyframeTrack(\.scale) {
+                CubicKeyframe(0.96, duration: 0.25)
+                CubicKeyframe(1.0,  duration: 0.30)
+            }
+            KeyframeTrack(\.lift) {
+                CubicKeyframe(-6.0, duration: 0.25)
+                CubicKeyframe(0.0,  duration: 0.30)
+            }
+            KeyframeTrack(\.shadowSwell) {
+                CubicKeyframe(0.20, duration: 0.25)
+                CubicKeyframe(0.0,  duration: 0.30)
+            }
+            KeyframeTrack(\.shadowRadiusSwell) {
+                CubicKeyframe(14.0, duration: 0.25)
+                CubicKeyframe(0.0,  duration: 0.30)
+            }
+            KeyframeTrack(\.shadowYSwell) {
+                CubicKeyframe(8.0, duration: 0.25)
+                CubicKeyframe(0.0, duration: 0.30)
+            }
+            KeyframeTrack(\.shineOpacity) {
+                CubicKeyframe(0.55, duration: 0.27)
+                CubicKeyframe(0.0,  duration: 0.28)
+            }
+        }
         .onTapGesture {
             isFlipped.toggle()
         }
