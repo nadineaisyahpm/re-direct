@@ -1079,7 +1079,7 @@ struct RitualBackFaceCard: View {
 
     private var emptyStateSecondLine: String {
         switch ritual.id {
-        case "watch":      return "your next watched starts a memory."
+        case "watch":      return "your next watch starts a memory."
         case "read":       return "your next read starts a memory."
         case "mini-game":  return "your next puzzle starts a memory."
         case "reflect":    return "your next reflection starts a memory."
