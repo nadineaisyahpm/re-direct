@@ -355,6 +355,14 @@ struct DashboardView: View {
 
         private var rabbitHoleCount: Int { sessions.count }
 
+        private var rabbitHoleLine: String {
+            switch rabbitHoleCount {
+            case 0:  return "no rabbit holes\nyet."
+            case 1:  return "through 1\nrabbit hole."
+            default: return "through \(rabbitHoleCount)\nrabbit holes."
+            }
+        }
+
         var body: some View {
             Button(action: { print("re:log widget tapped") }) {
                 ZStack {
@@ -382,16 +390,6 @@ struct DashboardView: View {
 
                         VStack(alignment: .leading, spacing: 0) {
 
-                            Text("this week,")
-                                .font(.system(size: 13, weight: .light))
-                                .foregroundColor(Color(hex: "#2C2825").opacity(0.42))
-                                .tracking(0.1)
-                                .opacity(appeared ? 1 : 0)
-                                .offset(y: appeared ? 0 : 6)
-                                .animation(.smooth.delay(0.18), value: appeared)
-
-                            Spacer().frame(height: 5)
-
                             Text("your mind\nwandered")
                                 .font(.custom("InstrumentSerif-Italic", size: 27))
                                 .foregroundColor(Color(hex: "#2C2825"))
@@ -403,11 +401,13 @@ struct DashboardView: View {
 
                             Spacer().frame(height: 8)
 
-                            Text("through \(rabbitHoleCount)\nrabbit holes.")
+                            Text(rabbitHoleLine)
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundColor(Color(hex: "#2C2825").opacity(0.72))
                                 .lineSpacing(2)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .contentTransition(.numericText())
+                                .animation(.smooth, value: rabbitHoleCount)
                                 .opacity(appeared ? 1 : 0)
                                 .offset(y: appeared ? 0 : 8)
                                 .animation(.smooth.delay(0.30), value: appeared)
@@ -486,7 +486,7 @@ struct DashboardView: View {
                     .onChanged { _ in isPressed = true }
                     .onEnded   { _ in isPressed = false }
             )
-            .accessibilityLabel("re:log — your mind wandered through \(rabbitHoleCount) rabbit holes this week. Tap to explore your curiosity trail.")
+            .accessibilityLabel("re:log — \(rabbitHoleLine.replacingOccurrences(of: "\n", with: " ")) Tap to explore your curiosity trail.")
             .onAppear {
                 withAnimation { appeared = true }
             }

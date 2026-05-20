@@ -791,6 +791,9 @@ struct EnhancedPreviewButton: View {
     let selectedTheme: TimerReminderTheme
     @Binding var previewReady: Bool
 
+    @Environment(\.modelContext) private var context
+    @State private var lastSavedSessionId: UUID? = nil
+
     var body: some View {
         VStack(spacing: 8) {
             Button(action: {
@@ -798,6 +801,13 @@ struct EnhancedPreviewButton: View {
                     print("⚠️ Duration is zero.")
                     return
                 }
+                let session = TimerSession()
+                session.startedAt = .now
+                session.plannedMinutes = (hours * 60) + minutes
+                context.insert(session)
+                try? context.save()
+                lastSavedSessionId = session.id
+
                 withAnimation(.spring(duration: 0.3, bounce: 0.2)) {
                     previewReady = true
                 }
@@ -839,6 +849,7 @@ struct EnhancedPreviewButton: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
+        .sensoryFeedback(.impact(weight: .medium), trigger: lastSavedSessionId)
     }
 }
 
