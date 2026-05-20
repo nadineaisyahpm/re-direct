@@ -11,13 +11,18 @@ enum SeedImporterError: Error, Equatable, Sendable {
 @MainActor
 struct SeedImporter {
 
-    private let loader: SeedBundleLoader
+    private let loader: any CuriositySeedSource
     private let userDefaults: UserDefaults
-    private let seedVersionKey = "redirect.seed.installed_version"
+    private let seedVersionKey: String
 
-    init(loader: SeedBundleLoader = SeedBundleLoader(), userDefaults: UserDefaults = .standard) {
+    init(
+        loader: any CuriositySeedSource = SeedBundleLoader(),
+        userDefaults: UserDefaults = .standard,
+        seedVersionKey: String = "redirect.seed.installed_version"
+    ) {
         self.loader = loader
         self.userDefaults = userDefaults
+        self.seedVersionKey = seedVersionKey
     }
 
     func importIfNeeded(into context: ModelContext) throws {

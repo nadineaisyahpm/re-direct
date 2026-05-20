@@ -5,7 +5,11 @@ enum SeedBundleError: Error, Equatable, Sendable {
     case decoding(message: String)
 }
 
-struct SeedBundleLoader: Sendable {
+protocol CuriositySeedSource: Sendable {
+    func load() throws -> CuriositySeedDTO
+}
+
+struct SeedBundleLoader: CuriositySeedSource, Sendable {
     let bundle: Bundle
     let resourceName: String
     let resourceExtension: String
