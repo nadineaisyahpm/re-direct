@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+// status: provisional, pending Slice E direction
 @Model
 final class RitualSelection {
     @Attribute(.unique) var id: UUID = UUID()

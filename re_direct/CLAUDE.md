@@ -41,45 +41,48 @@ It does **not** mean:
 
 ## 2. Product Architecture
 
-Understand the product loop before changing UI.
+Understand the product loop before changing UI. Each surface owns one verb. Blurring them creates duplicate selection paths and confused data wiring.
 
-Current conceptual structure:
+Conceptual structure:
 
-1. **Dashboard**
+1. **Dashboard — *discovers***
    - Daily curiosity discovery
    - Search
-   - Editorial carousel
-   - Re:Log preview
+   - Editorial carousel sourced from seeded `CuriosityTopic` rows
+   - Re:Log preview widget
 
-2. **Timer**
-   - Set usage window
-   - Choose redirect methods
-   - Select tracked apps
-   - Choose reminder theme
-   - Preview reminder setup
+2. **Timer — *commits***
+   - Sets the usage boundary (duration, theme, tracked apps)
+   - Picks the **redirect method category** for the upcoming session (one of `watch`, `read`, `mini-game`, `reflect`, `deep-dive`)
+   - The preview/start affordance creates a `TimerSession` row representing the boundary commitment
 
-3. **re:tuals**
-   - Choose what the user returns to when timer ends
-   - Saved ritual swipe deck
-   - Ritual selection
-   - “when timer ends” payload preview
+3. **re:tuals — *remembers* (per method)**
+   - Each card represents one method lane (one `RedirectMethod`)
+   - Today the lanes carry hardcoded editorial copy and the deck still surfaces a "choose this" affordance from the v0.1.0 prototype
+   - Future direction (gated on the `CuriosityEngagement` model): tapping a card flips it to a back face showing the user's recent rabbit holes in that lane. "choose this" retires only once the tap-to-flip history flow exists
+   - Does **not** own picking a method category — Timer already did that
 
-4. **Re:Log**
-   - Reflection and statistics
-   - Top topics
-   - Expandable topic detail
-   - Screen time recap
+4. **Re:Log — *summarizes* (across methods)**
+   - Aggregate, cross-method analytics: top topics overall, reflections, total time, optional Screen Time recap
+   - Reads from `TimerSession`, `ReflectionEntry`, `CuriosityEngagement` (future), and optional aggregates
+   - Does **not** own per-lane drill-down (re:tuals does that)
 
 5. **Settings**
    - Placeholder / future configuration
 
 Do not blur these responsibilities unless explicitly asked.
 
-For example:
-- Timer configures the session.
-- re:tuals chooses the redirect content.
-- Re:Log reflects on what happened.
+Three different verbs:
 - Dashboard introduces curiosity.
+- Timer commits to a category and a boundary.
+- re:tuals remembers within a category.
+- Re:Log summarizes across categories.
+
+Data layer reminder:
+- A `TimerSession` is a boundary commitment, **not** a rabbit hole.
+- A rabbit hole = the user engaged with content (read, watched, completed a prompt). That belongs to a future `CuriosityEngagement` model, not to `TimerSession`.
+
+See `docs/ROADMAP.md` for the full architecture and slice sequence.
 
 ## 3. Design Language
 

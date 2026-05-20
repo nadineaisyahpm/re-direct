@@ -801,6 +801,12 @@ struct EnhancedPreviewButton: View {
                     print("⚠️ Duration is zero.")
                     return
                 }
+                // A TimerSession represents a boundary commitment, NOT a rabbit hole.
+                // Curiosity engagement (read / watched / completed a prompt) is a
+                // separate domain event and will be tracked by a future
+                // CuriosityEngagement model. The button copy still reads "preview"
+                // from the v0.1.0 prototype; revisit that wording in a future slice
+                // now that the affordance commits a real row.
                 let session = TimerSession()
                 session.startedAt = .now
                 session.plannedMinutes = (hours * 60) + minutes

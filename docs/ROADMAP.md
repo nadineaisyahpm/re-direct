@@ -1,0 +1,166 @@
+# re:direct — Roadmap
+
+This document is the corrected product architecture and the implementation roadmap for re:direct. It supersedes any older slice-level framing in commit messages or chat logs.
+
+## Product
+
+re:direct is a SwiftUI iOS app that helps people set gentle boundaries around distracting apps and then *redirect* their attention toward intentional curiosity rituals instead of passive doomscrolling. The product loop has four beats:
+
+1. **Discover** a curiosity (Dashboard).
+2. **Commit** to a boundary and choose a redirect method/category (Timer).
+3. **Remember** what the user has done within each method, and offer return paths (re:tuals).
+4. **Summarize** behavior across methods, topics, sessions, and reflections (Re:Log).
+
+The visual language is **paper + glass** — warm paper texture as the emotional base, restrained iOS liquid glass for tactile controls, editorial typography over information density.
+
+## Principles
+
+- **Local-first.** Reflections, app-usage data, timer history, prompt history, and curiosity engagements all live on the user's device. Nothing leaves it unless we deliberately authorize the boundary crossing.
+- **Provider-agnostic AI.** When AI generation arrives, it goes through a thin proxy with a stable contract — we don't lock to one vendor.
+- **Privacy by minimization.** When a remote service is eventually called, only sanitized data (interest keywords, mood, time budget) crosses the boundary. No raw reflections. No Apple identity material forwarded.
+- **Surgical change.** Each slice touches one concern. The carousel card is correct; the data going into it is the lever.
+- **Honest empty states.** Copy adapts to 0 / 1 / N. Numbers reflect reality, not template defaults.
+
+## Surface responsibilities
+
+The four primary screens each own one verb. Blurring them creates the kind of overlap that produced the Slice 8 rabbit-hole-count confusion.
+
+### Dashboard — *discovers*
+
+- Daily curiosity carousel sourced from seeded `CuriosityTopic` rows.
+- Search affordance (placeholder copy today).
+- Re:Log preview widget — a compact summary that reads from local data only.
+
+Does **not** own: session telemetry, per-method history, aggregate analytics.
+
+### Timer — *commits*
+
+- Picks a **redirect method category** (one of the 5: `watch`, `read`, `mini-game`, `reflect`, `deep-dive`) for the upcoming boundary session.
+- Picks duration, theme, tracked apps.
+- The preview/start affordance creates a `TimerSession` row representing the boundary commitment.
+
+Does **not** own: picking specific content, logging engagement, visualizing past sessions.
+
+### re:tuals — *remembers* (per method)
+
+- Each card represents one method lane (one `RedirectMethod`).
+- Today the lanes are decorative — five hardcoded `RedirectRitual.samples` carry the editorial copy.
+- Future direction (gated on the `CuriosityEngagement` model): tapping a card flips it to a back face showing the user's recent rabbit holes in that lane. The empty state nudges the user to start one via Timer.
+
+Does **not** own: picking a method category (Timer already did that). The current "choose this" button retains its current behavior until tap-to-flip history exists; it is **not** removed in any near-term slice.
+
+### Re:Log — *summarizes* (across methods)
+
+- Aggregate, cross-method analytics: top topics overall, reflections, total time across lanes, optional Screen Time recap when available, behavioral patterns.
+- Reads from `TimerSession`, `ReflectionEntry`, `CuriosityEngagement` (future), and optionally Screen Time aggregates (research-gated).
+
+Does **not** own: per-lane drill-down (re:tuals does that). Real-time session state.
+
+## Data model — status by entity
+
+| Entity | Status | Meaning |
+|---|---|---|
+| `CuriosityTopic`, `CuriosityPrompt`, `TopicTrail`, `TopicTrailStep` | seeded, in use | Curated discovery content. Read on Dashboard. |
+| `RedirectMethod` | seeded, in use | The 5-category taxonomy. Single source of truth for method slugs. |
+| `ReminderTheme` | seeded, idle | Available for future ThemeGrid wiring. |
+| `TrackedAppSelection` | model exists, idle | Future: which apps the user wants to set boundaries on. |
+| `UserProfile` | in use (write side only) | Single local profile row. Created/updated on Apple Sign-In. |
+| `TimerSession` | in use | A **boundary commitment** — start, planned minutes, optional end, completion/interruption. Created by the current Timer preview/start affordance. **NOT a rabbit hole.** |
+| `ReflectionEntry` | model exists, no write surface yet | Future: reflection text linked to a `TimerSession`. |
+| `Ritual`, `RitualSelection` | provisional | Original intent ("user-customized redirect templates") doesn't fit the corrected re:tuals semantics. Kept in schema with a `status: provisional` comment; decision deferred until a real driver appears (likely Slice E or later). |
+| `ScreenTimeSummary` | model exists, no write surface yet | Future: daily aggregates only, never raw event logs. Gated on Phase 7 research. |
+| `AIRecommendation` | model + cache in use, no producer | Read side ready; producer (the AI proxy) is Phase 6 work. |
+| **`CuriosityEngagement`** | **not yet implemented** | Future: the actual rabbit-hole model. Fields proposed in Slice E1; implementation in Slice E2. |
+
+### Proposed `CuriosityEngagement`
+
+```
+CuriosityEngagement
+  id: UUID
+  methodSlug: String           // joins to RedirectMethod.slug
+  contentTitle: String         // optional override of topic.title
+  sourceURL: String?           // optional, kept local
+  engagedAt: Date
+  durationSeconds: Int?        // optional self-reported time
+  note: String?                // optional one-line note
+  deletedAt: Date?
+  topic: CuriosityTopic?       // optional link
+  prompt: CuriosityPrompt?     // optional link
+  session: TimerSession?       // optional: which session this happened during
+```
+
+Creation surfaces are designed in Slice E1 before any model code lands.
+
+### What changed semantically in this brief
+
+Earlier work (through Slice 8) briefly counted `TimerSession` rows as "rabbit holes" in the Re:Log widget. **That was wrong** and was rolled back in Slice 8.1. The corrected model:
+
+- Timer commits a session → `TimerSession` row.
+- User engages with content (reads, watches, completes a prompt) → `CuriosityEngagement` row (future).
+- A user can start 5 timers and engage with nothing; a user can engage without ever starting a timer. They are independent.
+
+The Re:Log widget will count `CuriosityEngagement` rows once that model lands. Until then it shows persistent `0` with the honest empty-state copy "no rabbit holes yet."
+
+### TimerSession creation note
+
+The current preview/start affordance in `TimerView` saves a `TimerSession` on tap. That row represents a boundary commitment, not curiosity engagement. The button is currently labeled **"preview"** — that copy may want future review now that the affordance commits real data; flagged but not changed in this brief.
+
+## Phase history (what's shipped)
+
+### Phase 1 — Foundation
+
+- 14-entity SwiftData schema, idempotent seed importer, container wired at launch.
+- Provider-agnostic AI proxy contract types (request/response/error/validator/fingerprint).
+- Local AI recommendation cache with SHA-256 fingerprint that never leaves the device.
+- Keychain wrapper for Apple identity (`AfterFirstUnlockThisDeviceOnly`).
+- Test target added by hand-editing `project.pbxproj`; shared scheme; 28 tests across 6 suites in Swift Testing.
+- Sign in with Apple coordinator + persister (entitlement step deferred to Slice 7.1).
+- Git workflow policy documented in `docs/GIT_WORKFLOW.md`.
+
+### Phase 2 — Wiring the prototype to real data
+
+- Dashboard carousel reads seeded `CuriosityTopic` rows with a per-field fallback ladder (one source per card; inert defaults for unused fields).
+- Timer method labels override from seeded `RedirectMethod.displayName` where slugs match.
+- Re:Log widget copy pluralized (0 / 1 / N) with numeric content transition.
+- Timer start saves a `TimerSession` row; single medium-impact haptic on commit.
+- Re:Log widget decoupled from `TimerSession` count (Slice 8.1) — see semantic correction above.
+
+## Slice sequence (forward)
+
+| Slice | Goal | Status |
+|---|---|---|
+| **Slice P-doc** | Lock the corrected architecture (this document + CLAUDE.md update + inline comments) | in flight |
+| **Slice E1** | Engagement model + creation-surface design proposal (documentation-only) | proposed |
+| **Slice E2** | Implement `CuriosityEngagement` SwiftData model + add to schema + tests | proposed, depends on E1 |
+| **Slice E3** | First engagement creation surface (smallest viable) | proposed, depends on E2 |
+| **Slice 6.4 (redesigned)** | re:tuals tap-to-flip per-lane history; "choose this" retires once the flip flow exists | proposed, depends on E3 |
+| **Slice 9.1** | Re:Log shows `TimerSession` stats as a section (separate from rabbit hole count) | proposed |
+| **Slice 7.1** | Apple Sign-In capability enable + end-to-end verification | proposed, manual Xcode step required |
+| **Phase 6** | AI proxy implementation (Cloudflare Worker) + iOS client | future |
+| **Phase 7** | Screen Time API research spike | future |
+| **Phase 8** | CloudKit private database sync | future |
+| **Phase 9** | TestFlight family/internal distribution | future |
+
+### Explicitly killed slices
+
+- **Original Slice 6.4** ("wire re:tuals deck to seeded `CuriosityTopic`") — based on the wrong mapping. Replaced by Slice 6.4 (redesigned) above.
+- **Slice 6.5** (ThemeGrid seeded read) — no visible delta possible until the seed schema extends with gradient/swatch data.
+
+## Risks and carry-forward
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| Engagement data structure may need iteration | Medium | Slice E1 is documentation before any model code lands |
+| `Ritual` / `RitualSelection` sit unused | Low | Tagged provisional in source; revisit when a real driver appears or at CloudKit migration |
+| Re:tuals card editorial copy stays hardcoded | Low | Acceptable until either a seed schema extension or a content-design pass |
+| `TimerSession` rows accumulate from preview taps with no completion path | Low | Slice 8.1's `0` count means they're invisible; Slice 8.1 + inline doc comment is sufficient until completion lands |
+| Screen Time API uncertainty | High | re:tuals (user-declared engagement) becomes the canonical signal; Screen Time is enrichment when available |
+| CloudKit migration debt (`@Attribute(.unique)` everywhere) | Known | Phase 8 task — drop unique attributes, move uniqueness to repository layer |
+| Apple Sign-In runtime gated on Team setup | Known | Slice 7.1 captures the manual Xcode steps |
+
+## Conventions
+
+- **Commits**: subject + optional body only. No trailers, no co-author tags. See `docs/GIT_WORKFLOW.md`.
+- **Tests**: Swift Testing (`@Test`, `#expect`). New behavior covered before merge; environment-dependent tests auto-skip cleanly.
+- **Build**: `xcodebuild ... CODE_SIGNING_ALLOWED=NO` for CLI; entitlement-gated paths fail silently in unsigned builds.
+- **Privacy disclosure**: any change that expands what data leaves the device pauses and asks before proceeding.
