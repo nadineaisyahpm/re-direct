@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-final class RedirectMethodRecord {
+final class RedirectMethod {
     @Attribute(.unique) var id: UUID = UUID()
     @Attribute(.unique) var slug: String = ""
     var displayName: String = ""

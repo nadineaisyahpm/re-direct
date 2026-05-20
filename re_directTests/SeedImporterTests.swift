@@ -40,10 +40,10 @@ struct SeedImporterTests {
         #expect(trails.count == 1)
         #expect(trails.first?.steps?.count == 2)
 
-        let themes = try context.fetch(FetchDescriptor<ReminderThemeRecord>())
+        let themes = try context.fetch(FetchDescriptor<ReminderTheme>())
         #expect(themes.count == 1)
 
-        let methods = try context.fetch(FetchDescriptor<RedirectMethodRecord>())
+        let methods = try context.fetch(FetchDescriptor<RedirectMethod>())
         #expect(methods.count == 1)
     }
 

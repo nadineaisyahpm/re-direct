@@ -13,7 +13,7 @@ final class Ritual {
     var deletedAt: Date? = nil
 
     var topic: CuriosityTopic?
-    var redirectMethod: RedirectMethodRecord?
+    var redirectMethod: RedirectMethod?
 
     @Relationship(deleteRule: .nullify, inverse: \RitualSelection.ritual)
     var selections: [RitualSelection]? = []

@@ -71,10 +71,10 @@ struct SeedImporter {
     }
 
     private func upsertReminderThemes(_ items: [ReminderThemeDTO], into context: ModelContext) throws {
-        let existing = try fetchBySlug(ReminderThemeRecord.self, in: context)
+        let existing = try fetchBySlug(ReminderTheme.self, in: context)
         for dto in items {
             let record = existing[dto.slug] ?? {
-                let r = ReminderThemeRecord()
+                let r = ReminderTheme()
                 r.slug = dto.slug
                 context.insert(r)
                 return r
@@ -85,10 +85,10 @@ struct SeedImporter {
     }
 
     private func upsertRedirectMethods(_ items: [RedirectMethodDTO], into context: ModelContext) throws {
-        let existing = try fetchBySlug(RedirectMethodRecord.self, in: context)
+        let existing = try fetchBySlug(RedirectMethod.self, in: context)
         for dto in items {
             let record = existing[dto.slug] ?? {
-                let r = RedirectMethodRecord()
+                let r = RedirectMethod()
                 r.slug = dto.slug
                 context.insert(r)
                 return r
@@ -226,5 +226,5 @@ protocol SlugIdentifiable {
 
 extension CuriosityTopic: SlugIdentifiable {}
 extension TopicTrail: SlugIdentifiable {}
-extension ReminderThemeRecord: SlugIdentifiable {}
-extension RedirectMethodRecord: SlugIdentifiable {}
+extension ReminderTheme: SlugIdentifiable {}
+extension RedirectMethod: SlugIdentifiable {}

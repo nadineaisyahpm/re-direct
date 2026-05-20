@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Data Models
 // ─────────────────────────────────────────────
 
-enum RedirectMethod: String, CaseIterable, Identifiable {
+enum TimerRedirectMethod: String, CaseIterable, Identifiable {
     case watch    = "Watch"
     case read     = "Read"
     case miniGame = "Mini Game"
@@ -20,32 +20,32 @@ struct TrackedApp: Identifiable, Hashable {
     let colorHex: String
 }
 
-struct ReminderTheme: Identifiable, Hashable {
+struct TimerReminderTheme: Identifiable, Hashable {
     let id: String
     let name: String
     let gradientHexes: [String]
     let swatches: [String]
 
-    static let samples: [ReminderTheme] = [
-        ReminderTheme(id: "dandelion", name: "Dandelion",
+    static let samples: [TimerReminderTheme] = [
+        TimerReminderTheme(id: "dandelion", name: "Dandelion",
             gradientHexes: ["#FFFDF2","#EAC1D3"],
             swatches: ["#FFFDF2","#F5E8C0","#EAC1D3","#D4A8BE"]),
-        ReminderTheme(id: "desert", name: "Desert",
+        TimerReminderTheme(id: "desert", name: "Desert",
             gradientHexes: ["#C8B898","#A89878"],
             swatches: ["#C8B898","#A89878","#887858","#685838"]),
-        ReminderTheme(id: "sky",    name: "Sky",
+        TimerReminderTheme(id: "sky",    name: "Sky",
             gradientHexes: ["#8AACCC","#5880A8"],
             swatches: ["#8AACCC","#6890B0","#4A7090","#2A5070"]),
-        ReminderTheme(id: "mist",   name: "Mist",
+        TimerReminderTheme(id: "mist",   name: "Mist",
             gradientHexes: ["#C8D4D8","#98B0B8"],
             swatches: ["#C8D4D8","#A8B8C0","#8898A0","#687880"]),
-        ReminderTheme(id: "night",  name: "Night",
+        TimerReminderTheme(id: "night",  name: "Night",
             gradientHexes: ["#2A2A3A","#0A0A18"],
             swatches: ["#2A2A3A","#1A1A28","#0A0A18","#3A3A50"]),
-        ReminderTheme(id: "neon",   name: "Neon",
+        TimerReminderTheme(id: "neon",   name: "Neon",
             gradientHexes: ["#1A1A2E","#2A1A3E"],
             swatches: ["#FF4488","#44FFCC","#4488FF","#FF8844"]),
-        ReminderTheme(id: "dusk",   name: "Dusk",
+        TimerReminderTheme(id: "dusk",   name: "Dusk",
             gradientHexes: ["#1C2A3A","#0C1A2A"],
             swatches: ["#1C2A3A","#2C4A6A","#4C7A9A","#8CAABA"]),
     ]
@@ -102,7 +102,7 @@ struct TimerView: View {
 
     @State private var selectedHours: Int   = 0
     @State private var selectedMinutes: Int = 45
-    @State private var selectedMethods: Set<RedirectMethod> = [.watch, .read]
+    @State private var selectedMethods: Set<TimerRedirectMethod> = [.watch, .read]
 
     @State private var selectedApps: [TrackedApp] = [
         TrackedApp(id: "instagram", name: "Instagram", iconName: nil, colorHex: "#E1306C"),
@@ -111,7 +111,7 @@ struct TimerView: View {
     @State private var searchText: String = ""
     @FocusState private var isSearchFocused: Bool
 
-    @State private var selectedTheme: ReminderTheme = ReminderTheme.samples[0]
+    @State private var selectedTheme: TimerReminderTheme = TimerReminderTheme.samples[0]
     @State private var previewPulse = false
     @State private var previewReady = false
 
@@ -367,9 +367,9 @@ struct TimerPickerCard<Content: View>: View {
 // ─────────────────────────────────────────────
 
 struct MethodSelector: View {
-    @Binding var selectedMethods: Set<RedirectMethod>
+    @Binding var selectedMethods: Set<TimerRedirectMethod>
 
-    private func cardColor(for method: RedirectMethod) -> Color {        switch method {
+    private func cardColor(for method: TimerRedirectMethod) -> Color {        switch method {
         case .watch:    return Color(hex: "#B8A8B0")
         case .read:     return Color(hex: "#1B4D4A")
         case .miniGame: return Color(hex: "#C8B898")
@@ -378,13 +378,13 @@ struct MethodSelector: View {
         }
     }
 
-    private func usesLightText(_ method: RedirectMethod) -> Bool {
-        [RedirectMethod.read, .deepDive, .watch].contains(method)
+    private func usesLightText(_ method: TimerRedirectMethod) -> Bool {
+        [TimerRedirectMethod.read, .deepDive, .watch].contains(method)
     }
 
     var body: some View {
         VStack(spacing: 8) {
-            ForEach(RedirectMethod.allCases) { method in
+            ForEach(TimerRedirectMethod.allCases) { method in
                 let isSelected = selectedMethods.contains(method)
                 let base = cardColor(for: method)
                 let lightText = usesLightText(method)
@@ -628,7 +628,7 @@ struct InteractiveAppToken: View {
 // ─────────────────────────────────────────────
 
 struct ThemeGrid: View {
-    @Binding var selectedTheme: ReminderTheme
+    @Binding var selectedTheme: TimerReminderTheme
 
     private let columns = [
         GridItem(.flexible(), spacing: 10),
@@ -638,7 +638,7 @@ struct ThemeGrid: View {
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(ReminderTheme.samples) { theme in
+            ForEach(TimerReminderTheme.samples) { theme in
                 ThemeCard(
                     theme: theme,
                     isSelected: selectedTheme.id == theme.id,
@@ -659,7 +659,7 @@ struct ThemeGrid: View {
 // ─────────────────────────────────────────────
 
 struct ThemeCard: View {
-    let theme: ReminderTheme
+    let theme: TimerReminderTheme
     let isSelected: Bool
     let isAnySelected: Bool
     let onTap: () -> Void
@@ -768,7 +768,7 @@ struct ThemeCard: View {
 struct EnhancedPreviewButton: View {
     let hours: Int
     let minutes: Int
-    let selectedTheme: ReminderTheme
+    let selectedTheme: TimerReminderTheme
     @Binding var previewReady: Bool
 
     var body: some View {

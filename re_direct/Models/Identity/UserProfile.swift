@@ -10,8 +10,8 @@ final class UserProfile {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
-    var activeReminderTheme: ReminderThemeRecord?
-    var activeRedirectMethod: RedirectMethodRecord?
+    var activeReminderTheme: ReminderTheme?
+    var activeRedirectMethod: RedirectMethod?
 
     init() {}
 }
