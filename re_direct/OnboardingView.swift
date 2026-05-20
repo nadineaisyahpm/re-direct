@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // ─────────────────────────────────────────────
 // MARK: - Onboarding View
@@ -7,6 +8,8 @@ import SwiftUI
 struct OnboardingView: View {
 
     @State private var showDashboard = false
+    @State private var signInCoordinator = AppleSignInCoordinator()
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
 
@@ -88,7 +91,7 @@ struct OnboardingView: View {
                             .padding(.top, 16)
 
                         HStack(spacing: 12) {
-                            SocialButton(icon: "apple.logo", action: { print("apple tapped") })
+                            SocialButton(icon: "apple.logo", action: { Task { await signInWithApple() } })
                             SocialButton(icon: "globe",      action: { print("google tapped") })
                             SocialButton(icon: "xmark",      action: { print("x tapped") })
                         }
@@ -104,6 +107,23 @@ struct OnboardingView: View {
         .preferredColorScheme(.light)
         .fullScreenCover(isPresented: $showDashboard) {
             AppTabView()
+        }
+    }
+
+    @MainActor
+    private func signInWithApple() async {
+        do {
+            let result = try await signInCoordinator.signIn()
+            let persister = AppleSignInPersister(
+                keychain: KeychainAppleIDStore(),
+                context: modelContext
+            )
+            try persister.persist(result)
+            showDashboard = true
+        } catch {
+            #if DEBUG
+            print("⚠️ Apple Sign-In failed: \(error)")
+            #endif
         }
     }
 }
