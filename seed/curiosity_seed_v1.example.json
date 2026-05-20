@@ -1,5 +1,5 @@
 {
-  "seed_version": 1,
+  "seed_version": 2,
   "generated_at": "2026-05-20T00:00:00Z",
   "locale": "en-US",
   "topics": [
@@ -65,10 +65,12 @@
     { "slug": "warm-paper", "display_name": "Warm Paper", "asset_name": "Reminder_WarmPaper" },
     { "slug": "deep-teal", "display_name": "Deep Teal", "asset_name": "Reminder_DeepTeal" }
   ],
+  "_comment_redirect_methods": "display_name intentionally matches TimerRedirectMethod.rawValue — content overrides arrive in a later slice.",
   "redirect_methods": [
-    { "slug": "read", "display_name": "Read", "summary": "Open a longer article or chapter instead of the next short post." },
-    { "slug": "breath", "display_name": "Breath", "summary": "A two-minute breathing pattern before deciding what's next." },
-    { "slug": "stretch", "display_name": "Stretch", "summary": "Stand up and move for the length of the timer." },
-    { "slug": "journal", "display_name": "Journal", "summary": "Write a few sentences about what you were just looking for." }
+    { "slug": "watch", "display_name": "Watch", "summary": "Let a short documentary lead you somewhere unexpected." },
+    { "slug": "read", "display_name": "Read", "summary": "Open a long-form piece instead of the next short post." },
+    { "slug": "mini-game", "display_name": "Mini Game", "summary": "A small puzzle to reset your attention loop." },
+    { "slug": "reflect", "display_name": "Reflect", "summary": "Quiet minutes to notice what you wanted from the scroll." },
+    { "slug": "deep-dive", "display_name": "Deep Dive", "summary": "Twenty undistracted minutes into something genuinely curious." }
   ]
 }

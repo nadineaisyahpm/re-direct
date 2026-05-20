@@ -109,26 +109,56 @@ struct DashboardView: View {
             }
         }
 
+        private static let hexPattern = #"^#[0-9A-Fa-f]{6}$"#
+
         private static func adapt(topic: CuriosityTopic, indexedAt index: Int) -> ReDirectTopic {
             let fallback = ReDirectTopicData.topFive[index % ReDirectTopicData.topFive.count]
-            let firstPrompt = (topic.prompts ?? []).min { $0.slug < $1.slug }
-            let subtitle = firstPrompt?.body.isEmpty == false
-                ? firstPrompt!.body
-                : topic.summary
-            let color = topic.accentColorHex.isEmpty ? fallback.colorHex : topic.accentColorHex
+
+            let subtitle: String = {
+                if !topic.summary.isEmpty { return topic.summary }
+                let firstPrompt = (topic.prompts ?? []).min { $0.slug < $1.slug }
+                if let body = firstPrompt?.body, !body.isEmpty {
+                    return trimToWords(body, max: 100)
+                }
+                return fallback.subtitle
+            }()
+
+            let imageSource: String = {
+                if !topic.coverAssetName.isEmpty, UIImage(named: topic.coverAssetName) != nil {
+                    return topic.coverAssetName
+                }
+                return fallback.imageURL
+            }()
+
+            let cardHex: String = {
+                if topic.accentColorHex.range(of: hexPattern, options: .regularExpression) != nil {
+                    return topic.accentColorHex
+                }
+                return fallback.colorHex
+            }()
+
             return ReDirectTopic(
                 id: index,
                 title: topic.title,
                 subtitle: subtitle,
-                imageURL: fallback.imageURL,
-                colorHex: color,
-                barHeight: fallback.barHeight,
-                barColorHex: fallback.barColorHex,
+                imageURL: imageSource,
+                colorHex: cardHex,
+                barHeight: 0,
+                barColorHex: "",
                 articleCount: 0,
                 videoCount: 0,
                 totalTime: "",
                 platformStats: []
             )
+        }
+
+        private static func trimToWords(_ s: String, max limit: Int) -> String {
+            if s.count <= limit { return s }
+            let prefix = String(s.prefix(limit))
+            if let lastSpace = prefix.lastIndex(of: " ") {
+                return String(prefix[..<lastSpace]) + "…"
+            }
+            return prefix + "…"
         }
 
         var body: some View {
@@ -195,36 +225,46 @@ struct DashboardView: View {
         let activeIndex: Int
 
         var body: some View {
-            HStack(spacing: 6) {
-                ForEach(0..<count, id: \.self) { index in
-                    let isActive = index == activeIndex
+            Group {
+                if count > 7 {
+                    Text("\(activeIndex + 1) of \(count)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(DSColor.ink.opacity(0.6))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                } else {
+                    HStack(spacing: 6) {
+                        ForEach(0..<count, id: \.self) { index in
+                            let isActive = index == activeIndex
 
-                    if isActive {
-                        Capsule()
-                            .fill(DSColor.ink.opacity(0.65))
-                            .frame(width: 28, height: 8)
-                            .overlay(
+                            if isActive {
                                 Capsule()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color.white.opacity(0.35), Color.clear],
-                                            startPoint: UnitPoint.top,
-                                            endPoint: UnitPoint.bottom
-                                        )
+                                    .fill(DSColor.ink.opacity(0.65))
+                                    .frame(width: 28, height: 8)
+                                    .overlay(
+                                        Capsule()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [Color.white.opacity(0.35), Color.clear],
+                                                    startPoint: UnitPoint.top,
+                                                    endPoint: UnitPoint.bottom
+                                                )
+                                            )
                                     )
-                            )
-                            .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
-                            .animation(.spring(duration: 0.35, bounce: 0.2), value: activeIndex)
-                    } else {
-                        Circle()
-                            .fill(Color(hex: "#2C2825").opacity(0.18))
-                            .frame(width: 8, height: 8)
-                            .animation(.spring(duration: 0.35, bounce: 0.2), value: activeIndex)
+                                    .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 1)
+                                    .animation(.spring(duration: 0.35, bounce: 0.2), value: activeIndex)
+                            } else {
+                                Circle()
+                                    .fill(Color(hex: "#2C2825").opacity(0.18))
+                                    .frame(width: 8, height: 8)
+                                    .animation(.spring(duration: 0.35, bounce: 0.2), value: activeIndex)
+                            }
+                        }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
             .background(.ultraThinMaterial)
             .clipShape(Capsule())
             .overlay(
@@ -238,28 +278,36 @@ struct DashboardView: View {
 
     struct DailyCard: View {
         let cardColor: String
+        /// Image source identifier: a bundled asset catalog name OR a remote URL.
+        /// The body tries `UIImage(named:)` first; on nil, falls back to AsyncImage.
         let imageURL: String
         let title: String
         let subtitle: String
 
         var body: some View {
             ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: URL(string: imageURL)) { phase in
-                    switch phase {
+                if let bundled = UIImage(named: imageURL) {
+                    Image(uiImage: bundled)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    AsyncImage(url: URL(string: imageURL)) { phase in
+                        switch phase {
 
-                    case .empty:
-                        Color(hex: cardColor)
+                        case .empty:
+                            Color(hex: cardColor)
 
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
 
-                    case .failure:
-                        Color(hex: cardColor)
+                        case .failure:
+                            Color(hex: cardColor)
 
-                    @unknown default:
-                        Color(hex: cardColor)
+                        @unknown default:
+                            Color(hex: cardColor)
+                        }
                     }
                 }
 
@@ -282,7 +330,7 @@ struct DashboardView: View {
                         .lineLimit(2)
                 }
                 .padding(.horizontal, 24)
-                .padding(.bottom, 28)
+                .padding(.bottom, title.count < 20 ? 22 : 28)
                 .padding(.top, 14)
             }
             .frame(width: 200, height: 270)

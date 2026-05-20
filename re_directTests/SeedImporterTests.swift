@@ -104,6 +104,21 @@ struct SeedImporterTests {
         #expect(topics.first?.seedVersion == 2)
     }
 
+    @Test func bundledRedirectMethodSlugsMatchCanonicalSet() throws {
+        let context = try makeContext()
+        let importer = SeedImporter(
+            loader: SeedBundleLoader(),
+            userDefaults: makeDefaults(),
+            seedVersionKey: "test.seed.version"
+        )
+        try importer.importIfNeeded(into: context)
+
+        let methods = try context.fetch(FetchDescriptor<RedirectMethod>())
+        let slugs = Set(methods.map { $0.slug })
+        let canonical: Set<String> = ["watch", "read", "mini-game", "reflect", "deep-dive"]
+        #expect(slugs == canonical)
+    }
+
     @Test func throwsOnTrailReferencingMissingPrompt() throws {
         let context = try makeContext()
         let importer = SeedImporter(
