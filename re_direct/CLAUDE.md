@@ -58,9 +58,10 @@ Conceptual structure:
 
 3. **re:tuals — *remembers* (per method)**
    - Each card represents one method lane (one `RedirectMethod`)
-   - Today the lanes carry hardcoded editorial copy and the deck still surfaces a "choose this" affordance from the v0.1.0 prototype
-   - Future direction (gated on the `CuriosityEngagement` model): tapping a card flips it to a back face showing the user's recent rabbit holes in that lane. "choose this" retires only once the tap-to-flip history flow exists
+   - The card front carries hardcoded editorial copy; tapping flips it to a back face showing the user's recent `CuriosityEngagement` rows in that lane
+   - The deck still surfaces a "choose this" affordance left over from the v0.1.0 prototype; it remains for now because `WhenTimerEndsCard` still reads from `selectedRitual`. It will retire once the active method becomes shared state driven by Timer (see ROADMAP § Slice T-shared)
    - Does **not** own picking a method category — Timer already did that
+   - Does **not** add a replacement selection CTA. **No "continue this lane →"** or similar. The card back is for inspection / memory only — engagement rows, lane copy, return paths into existing engagements. If a future surface needs to commit a method, the source of truth is the shared active method state, not a re:tuals tap
 
 4. **Re:Log — *summarizes* (across methods)**
    - Aggregate, cross-method analytics: top topics overall, reflections, total time, optional Screen Time recap

@@ -44,10 +44,15 @@ Does **not** own: picking specific content, logging engagement, visualizing past
 ### re:tuals — *remembers* (per method)
 
 - Each card represents one method lane (one `RedirectMethod`).
-- Today the lanes are decorative — five hardcoded `RedirectRitual.samples` carry the editorial copy.
-- Future direction (gated on the `CuriosityEngagement` model): tapping a card flips it to a back face showing the user's recent rabbit holes in that lane. The empty state nudges the user to start one via Timer.
+- The card front carries hardcoded editorial lane copy; tapping flips to a back face that shows the user's recent `CuriosityEngagement` rows for that lane (or a lane-personalized empty state).
+- The card back is **inspection-only**: a record of what the user did inside that lane and a return path into existing engagements. It does **not** commit anything.
 
-Does **not** own: picking a method category (Timer already did that). The current "choose this" button retains its current behavior until tap-to-flip history exists; it is **not** removed in any near-term slice.
+Does **not** own:
+- Picking a method category. Timer already did that.
+- A replacement selection CTA. **No "continue this lane →"** or similar. The card back is memory, not a chooser. If a future surface needs to commit a method, that commit comes from the shared active method state (see Slice T-shared below), not from a tap on a re:tuals card.
+- Per-engagement detail UI, charts, totals, or rankings. Those belong to Re:Log.
+
+The prototype "choose this" button remains for now because `WhenTimerEndsCard` still reads from `selectedRitual`. It retires only after the active method becomes shared state driven by Timer.
 
 ### Re:Log — *summarizes* (across methods)
 
@@ -129,11 +134,18 @@ The current preview/start affordance in `TimerView` saves a `TimerSession` on ta
 
 | Slice | Goal | Status |
 |---|---|---|
-| **Slice P-doc** | Lock the corrected architecture (this document + CLAUDE.md update + inline comments) | in flight |
-| **Slice E1** | Engagement model + creation-surface design proposal (documentation-only) | proposed |
-| **Slice E2** | Implement `CuriosityEngagement` SwiftData model + add to schema + tests | proposed, depends on E1 |
-| **Slice E3** | First engagement creation surface (smallest viable) | proposed, depends on E2 |
-| **Slice 6.4 (redesigned)** | re:tuals tap-to-flip per-lane history; "choose this" retires once the flip flow exists | proposed, depends on E3 |
+| **Slice P-doc** | Lock the corrected architecture (this document + CLAUDE.md update + inline comments) | done |
+| **Slice E1** | Engagement model + creation-surface design proposal (documentation-only) | done |
+| **Slice E2** | Implement `CuriosityEngagement` SwiftData model + add to schema + tests | done |
+| **Slice E3A** | First engagement creation surface: Re:Log "+ log a rabbit hole" sheet | done |
+| **Slice E3B** | Dashboard Re:Log widget reads `CuriosityEngagement` count | done |
+| **re:tuals Slice A** | Card copy reframed as method lanes | done |
+| **re:tuals Slice B** | Tap-to-flip empty-state shell | done |
+| **re:tuals Slice C** | Back face renders recent `CuriosityEngagement` rows for the lane | done |
+| **re:tuals Slice C.1** | Card flip surface polish | done |
+| **re:tuals Slice C.2** | Tactile 3D flip motion | done |
+| **Slice T-shared** | Shared active method state. Timer writes `activeRedirectMethodSlug`; re:tuals reads it (highlight or scroll-to), `WhenTimerEndsCard` reads it. re:tuals never writes. Unblocks "choose this" retirement. | proposed |
+| **re:tuals "choose this" retirement** | Remove the prototype `DeckControls.onChoose` path and the `selectedRitual` binding once `WhenTimerEndsCard` is driven by `activeRedirectMethodSlug` instead. No replacement selection CTA. | proposed, depends on T-shared |
 | **Slice 9.1** | Re:Log shows `TimerSession` stats as a section (separate from rabbit hole count) | proposed |
 | **Slice 7.1** | Apple Sign-In capability enable + end-to-end verification | proposed, manual Xcode step required |
 | **Phase 6** | AI proxy implementation (Cloudflare Worker) + iOS client | future |
@@ -141,10 +153,33 @@ The current preview/start affordance in `TimerView` saves a `TimerSession` on ta
 | **Phase 8** | CloudKit private database sync | future |
 | **Phase 9** | TestFlight family/internal distribution | future |
 
-### Explicitly killed slices
+### Slice T-shared (notes)
 
-- **Original Slice 6.4** ("wire re:tuals deck to seeded `CuriosityTopic`") — based on the wrong mapping. Replaced by Slice 6.4 (redesigned) above.
+The single piece of state to introduce:
+
+```
+activeRedirectMethodSlug: String?    // one of the 5 canonical slugs, or nil
+```
+
+Likely shape: a small `@Observable` model held at app scope (or scene scope), injected via `@Environment` or a custom `@EnvironmentObject`. Persistence is optional for v1 — in-memory is fine; if persisted, use `@AppStorage` with a string key.
+
+Write surface (single):
+- Timer's method picker on commit / start.
+
+Read surfaces:
+- `WhenTimerEndsCard` — shows the active lane's title/copy.
+- re:tuals deck — may highlight the active lane (e.g. small dot on its pagination index) or scroll-to-active on appear. **Read-only**. re:tuals must not write to `activeRedirectMethodSlug`.
+
+After this lands:
+- `DeckControls.onChoose` and the `selectedRitual` binding both retire.
+- The "choose this" button is removed.
+- No replacement CTA is added on the re:tuals back face.
+
+### Explicitly killed / dropped slices
+
+- **Original Slice 6.4** ("wire re:tuals deck to seeded `CuriosityTopic`") — based on the wrong mapping; superseded by re:tuals Slices A–C.
 - **Slice 6.5** (ThemeGrid seeded read) — no visible delta possible until the seed schema extends with gradient/swatch data.
+- **"continue this lane →"** (any variant of a re:tuals back-face selection CTA) — would reintroduce a chooser in re:tuals and conflict with the corrected architecture. Replaced by Slice T-shared above. Do not implement.
 
 ## Risks and carry-forward
 

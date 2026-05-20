@@ -13,7 +13,7 @@ A **rabbit hole** is a moment when the user actually engaged with curiosity cont
 `CuriosityEngagement` is the canonical record of these moments. It is the single source of truth for:
 
 - The Re:Log widget's rabbit hole count.
-- The re:tuals deck's future per-lane history (tap-to-flip back face).
+- The re:tuals deck's per-lane history (tap-to-flip back face).
 - Future Re:Log analytics: top topics, time-by-method aggregates, "you returned to X three times this month".
 - A fallback for engagement tracking when Apple's Screen Time APIs are not available or are restrictive — `CuriosityEngagement` is user-declared and local-first; Screen Time is enrichment.
 
@@ -127,13 +127,15 @@ Slice E3 will pick **one** surface to ship first. The others can land later. Eac
 
 ### Surface D — re:tuals back-face "+ add" button
 
-**Where**: inside the future flipped state of a re:tuals card (Slice 6.4 redesigned).
+**Where**: inside the flipped state of a re:tuals card (already shipped via re:tuals Slices B/C).
 
-**Flow**: tap a method lane's card to flip; back face shows recent engagements in that lane plus a "+ log one" affordance.
+**Flow**: tap a method lane's card to flip; back face shows recent engagements in that lane. A small "+ log one" affordance could be added beside the list to log another engagement in the same lane.
 
-**Pros**: keeps re:tuals self-sufficient — the user can both see and add engagement within the lane.
+**Pros**: keeps re:tuals self-sufficient for logging — the user can both see and add engagement within the lane.
 
-**Cons**: depends on Slice 6.4 redesigned shipping first, which itself depends on `CuriosityEngagement` existing. Circular. Not first.
+**Cons**: still routes the user back to the same logging sheet that Re:Log already exposes. Worth landing only if it removes meaningful friction; otherwise it's a duplicate of Surface B.
+
+**Important**: this affordance is *engagement creation*, not method selection. Tapping it must not bind a method choice or update `WhenTimerEndsCard`. re:tuals remains inspection-only at the lane level — see Slice T-shared in `docs/ROADMAP.md` for how Timer-driven active method state flows through the app.
 
 ### Surface ordering recommendation
 
@@ -148,25 +150,17 @@ This is a Slice E3 decision — not locked here. The Slice E3 prompt should re-e
 
 ---
 
-## 4. How re:tuals will consume `CuriosityEngagement`
+## 4. How re:tuals consumes `CuriosityEngagement`
 
-Future (Slice 6.4 redesigned, after E2/E3):
+**Shipped via re:tuals Slices B + C.** Each card's flipped back face holds a `@Query` scoped to the lane's `methodSlug` (filter `deletedAt == nil`, sort `engagedAt` descending, prefix 5). The populated state renders rows as `contentTitle` (Instrument Serif Italic, 16pt single line) + caption (relative date, optional minutes, en-dash separator). Empty state shows a lane-personalized two-line copy with a small horizontal hairline rule between the lines.
 
-```swift
-@Query private var allEngagements: [CuriosityEngagement]
-// Inside the per-lane flipped view:
-private var laneEngagements: [CuriosityEngagement] {
-    allEngagements
-        .filter { $0.methodSlug == lane.slug && $0.deletedAt == nil }
-        .sorted { $0.engagedAt > $1.engagedAt }
-        .prefix(10)
-        .map { $0 }
-}
-```
+**re:tuals is inspection-only.** It reads `CuriosityEngagement` rows for the current lane and renders them. It does **not**:
+- bind a method/category to a session,
+- update `WhenTimerEndsCard` (that anchor is the prototype `selectedRitual` from "choose this"; Slice T-shared replaces it with Timer-driven `activeRedirectMethodSlug`),
+- add a "continue this lane" or similar selection CTA,
+- write back to any of the rows it displays.
 
-The flipped view renders this as a vertical list of `contentTitle` (Instrument Serif Italic, 16pt) + relative timestamp ("2 days ago", "just now") + optional `note` preview clipped to 60 characters. Empty state: "no rabbit holes yet in this lane — try setting a [Watch] timer to start one."
-
-No additional model fields needed; the existing relationships are sufficient.
+No additional model fields are needed for the read path.
 
 The current `RedirectRitual.samples` array stays for the card front face (editorial copy and visuals). Only the back face is new.
 
