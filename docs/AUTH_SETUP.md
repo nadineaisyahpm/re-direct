@@ -2,6 +2,23 @@
 
 re:direct uses **Sign in with Apple** as the only auth path in v1 (personal/family use). The auth code is in place; enabling the capability is a one-time Xcode UI step that requires a configured Team.
 
+## Slice 7.1 — when to enable the capability
+
+The Xcode UI steps in the next section are deferred to a dedicated slice. Order:
+
+1. **Prerequisite**: finish the current Slice 6.x local content wiring and design review.
+2. **Slice 7.1 itself**:
+   - Set `DEVELOPMENT_TEAM` on the `re_direct` target.
+   - Add the **Sign in with Apple** capability (auto-creates `re_direct.entitlements`).
+   - Build with code signing on.
+   - Run on simulator or device.
+   - Tap the Apple `SocialButton` in onboarding; confirm the system auth sheet appears.
+   - After a successful sign-in, confirm:
+     - the `UserProfile` SwiftData row was created/updated with a non-empty `displayName`;
+     - the Apple user identifier is readable from the Keychain via `KeychainAppleIDStore.read()`;
+     - the 5 `KeychainAppleIDStoreTests` cases run (no longer auto-skip) and pass.
+3. **Must land before**: Phase 6 AI proxy HTTP client / Cloudflare proxy work, and any TestFlight build.
+
 ## What's wired (no manual step needed)
 
 - `AppleSignInCoordinator` (`re_direct/Identity/AppleSignInCoordinator.swift`) — drives the `ASAuthorizationController` flow and returns an `AppleSignInResult`.
