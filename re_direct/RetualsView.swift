@@ -475,62 +475,77 @@ struct RitualSwipeCard: View {
     }
 
     private var metadataLine: String {
-        "\(ritual.type.rawValue.lowercased()) · \(ritual.estimatedMinutes) min · \(ritual.mood)"
+        "\(ritual.estimatedMinutes) min · \(ritual.mood)"
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            Text(ritual.label)
-                .font(.custom("InstrumentSerif-Italic", size: 17))
-                .foregroundColor(Color(hex: "#1F1B18"))
-                .lineLimit(1)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background {
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 14, bottomLeadingRadius: 14,
-                        bottomTrailingRadius: 4, topTrailingRadius: 14,
-                        style: .continuous
-                    )
-                    .fill(Color(hex: "#FFFDF2"))
-                    .overlay {
+            HStack(alignment: .top, spacing: 8) {
+                Text(ritual.label)
+                    .font(.custom("InstrumentSerif-Italic", size: 17))
+                    .foregroundColor(Color(hex: "#1F1B18"))
+                    .lineLimit(1)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background {
                         UnevenRoundedRectangle(
                             topLeadingRadius: 14, bottomLeadingRadius: 14,
                             bottomTrailingRadius: 4, topTrailingRadius: 14,
                             style: .continuous
                         )
-                        .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+                        .fill(Color(hex: "#FFFDF2"))
+                        .overlay {
+                            UnevenRoundedRectangle(
+                                topLeadingRadius: 14, bottomLeadingRadius: 14,
+                                bottomTrailingRadius: 4, topTrailingRadius: 14,
+                                style: .continuous
+                            )
+                            .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+                        }
+                        .shadow(color: Color(hex: "#1F1B18").opacity(0.14),
+                                radius: 0, x: 1.5, y: 1.5)
                     }
-                    .shadow(color: Color(hex: "#1F1B18").opacity(0.14),
-                            radius: 0, x: 1.5, y: 1.5)
-                }
-                .padding(.top, 18)
-                .padding(.leading, 18)
 
-            Spacer().frame(height: 28)
+                Spacer()
+
+                Text("memory")
+                    .font(.custom("InstrumentSerif-Italic", size: 12))
+                    .foregroundColor(textColor.opacity(0.55))
+                    .padding(.top, 8)
+            }
+            .padding(.top, 18)
+            .padding(.horizontal, 18)
+
+            Spacer().frame(height: 22)
 
             RitualImageCollage(ritual: ritual)
                 .frame(maxWidth: .infinity)
-                .frame(height: 145)
+                .frame(height: 150)
 
-            Spacer().frame(height: 24)
+            Spacer().frame(height: 18)
+
+            Rectangle()
+                .fill(textColor.opacity(0.18))
+                .frame(height: 0.5)
+                .padding(.horizontal, 22)
+                .padding(.bottom, 12)
 
             Text(ritual.description)
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 12.5, weight: .regular))
                 .foregroundColor(textColor)
-                .lineSpacing(0.2)
+                .lineSpacing(2)
                 .multilineTextAlignment(.leading)
-                .lineLimit(5)
-                .minimumScaleFactor(0.92)
+                .lineLimit(4)
+                .minimumScaleFactor(0.94)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 22)
 
-            Spacer().frame(height: 14)
+            Spacer().frame(height: 10)
 
             Text(metadataLine)
-                .font(.custom("InstrumentSerif-Italic", size: 14))
-                .foregroundColor(textColor.opacity(0.78))
+                .font(.custom("InstrumentSerif-Italic", size: 13))
+                .foregroundColor(textColor.opacity(0.72))
                 .padding(.horizontal, 22)
                 .padding(.bottom, 22)
         }
@@ -681,26 +696,17 @@ struct DeckControls: View {
 
             Button(action: onChoose) {
                 Text("choose this")
-                    .font(.custom("InstrumentSerif-Italic", size: 22))
-                    .foregroundColor(Color(hex: "#1F1B18"))
-                    .underline(true, color: Color(hex: "#1F1B18").opacity(0.35))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
+                    .font(.custom("InstrumentSerif-Italic", size: 16))
+                    .foregroundColor(Color(hex: "#1F1B18").opacity(0.78))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
                     .background {
                         Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white, Color(hex: "#F2EFB8")],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
+                            .fill(Color(hex: "#FFFDF2").opacity(0.6))
                             .overlay {
                                 Capsule()
-                                    .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+                                    .stroke(Color(hex: "#1F1B18").opacity(0.22), lineWidth: 0.5)
                             }
-                            .shadow(color: Color(hex: "#1F1B18").opacity(0.16),
-                                    radius: 0, x: 1.5, y: 1.5)
                     }
             }
             .buttonStyle(ScaleButtonStyle(scale: 0.96))
@@ -1071,8 +1077,22 @@ struct RitualBackFaceCard: View {
         Array(engagements.prefix(5))
     }
 
+    private var emptyStateSecondLine: String {
+        switch ritual.id {
+        case "watch":      return "your next watched starts a memory."
+        case "read":       return "your next read starts a memory."
+        case "mini-game":  return "your next puzzle starts a memory."
+        case "reflect":    return "your next reflection starts a memory."
+        case "deep-dive":  return "your next dive starts a memory."
+        default:           return "the next one starts a memory."
+        }
+    }
+
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 0) {
+
+            header
+
             if engagements.isEmpty {
                 emptyState
             } else {
@@ -1087,12 +1107,62 @@ struct RitualBackFaceCard: View {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
                 }
+                .overlay(alignment: .topLeading) {
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(usesLightText ? 0.18 : 0.30),
+                            Color.clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: UnitPoint(x: 0.55, y: 0.45)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .allowsHitTesting(false)
+                }
         }
     }
 
+    private var header: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("recent · \(ritual.type.rawValue.lowercased())")
+                .font(.custom("InstrumentSerif-Italic", size: 17))
+                .foregroundColor(Color(hex: "#1F1B18"))
+                .lineLimit(1)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background {
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 14, bottomLeadingRadius: 14,
+                        bottomTrailingRadius: 4, topTrailingRadius: 14,
+                        style: .continuous
+                    )
+                    .fill(Color(hex: "#FFFDF2"))
+                    .overlay {
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 14, bottomLeadingRadius: 14,
+                            bottomTrailingRadius: 4, topTrailingRadius: 14,
+                            style: .continuous
+                        )
+                        .stroke(Color(hex: "#1F1B18").opacity(0.38), lineWidth: 1)
+                    }
+                    .shadow(color: Color(hex: "#1F1B18").opacity(0.14),
+                            radius: 0, x: 1.5, y: 1.5)
+                }
+
+            Spacer()
+
+            Text("front")
+                .font(.custom("InstrumentSerif-Italic", size: 12))
+                .foregroundColor(textColor.opacity(0.55))
+                .padding(.top, 8)
+        }
+        .padding(.top, 18)
+        .padding(.horizontal, 18)
+    }
+
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Spacer(minLength: 0)
+        VStack(spacing: 14) {
+            Spacer().frame(height: 36)
 
             Text("no rabbit holes here yet —")
                 .font(.custom("InstrumentSerif-Italic", size: 22))
@@ -1100,77 +1170,71 @@ struct RitualBackFaceCard: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("the next one starts a memory.")
+            Rectangle()
+                .fill(textColor.opacity(0.30))
+                .frame(width: 48, height: 0.5)
+
+            Text(emptyStateSecondLine)
                 .font(.system(size: 13, weight: .light))
                 .foregroundColor(textColor.opacity(0.72))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
-
-            flipBackHint
-                .padding(.bottom, 22)
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 28)
     }
 
     private var populatedState: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            Text("recent rabbit holes")
-                .font(.custom("InstrumentSerif-Italic", size: 15))
-                .foregroundColor(textColor.opacity(0.78))
-                .padding(.bottom, 8)
+            Spacer().frame(height: 18)
 
             Rectangle()
                 .fill(textColor.opacity(0.22))
                 .frame(height: 0.5)
-                .padding(.bottom, 14)
+                .padding(.bottom, 4)
 
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(visibleRows, id: \.id) { row in
-                    engagementRow(row)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(visibleRows.enumerated()), id: \.element.id) { idx, row in
+                    if idx > 0 {
+                        Rectangle()
+                            .fill(textColor.opacity(0.14))
+                            .frame(height: 0.5)
+                    }
+                    engagementRow(row, number: idx + 1)
                 }
             }
 
             Spacer(minLength: 0)
-
-            HStack {
-                Spacer()
-                flipBackHint
-                Spacer()
-            }
-            .padding(.bottom, 4)
         }
         .padding(.horizontal, 22)
-        .padding(.top, 22)
         .padding(.bottom, 18)
     }
 
     @ViewBuilder
-    private func engagementRow(_ engagement: CuriosityEngagement) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(engagement.contentTitle)
-                .font(.custom("InstrumentSerif-Italic", size: 16))
-                .foregroundColor(textColor)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
+    private func engagementRow(_ engagement: CuriosityEngagement, number: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("\(number)")
+                .font(.custom("InstrumentSerif-Italic", size: 13))
+                .foregroundColor(textColor.opacity(0.40))
+                .frame(width: 14, alignment: .leading)
 
-            Text(EngagementCaption.caption(for: engagement))
-                .font(.system(size: 11, weight: .light))
-                .foregroundColor(textColor.opacity(0.58))
-        }
-    }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(engagement.contentTitle)
+                    .font(.custom("InstrumentSerif-Italic", size: 16))
+                    .foregroundColor(textColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-    private var flipBackHint: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "arrow.uturn.backward")
-                .font(.system(size: 10, weight: .light))
-            Text("tap to flip back")
-                .font(.custom("InstrumentSerif-Italic", size: 12))
+                Text(EngagementCaption.caption(for: engagement, separator: "–"))
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(textColor.opacity(0.58))
+            }
         }
-        .foregroundColor(textColor.opacity(0.55))
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1185,11 +1249,12 @@ enum EngagementCaption {
     static func caption(
         for engagement: CuriosityEngagement,
         now: Date = .now,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        separator: String = "·"
     ) -> String {
         let date = relativeDate(engagement.engagedAt, now: now, calendar: calendar)
         if let duration = durationText(engagement.durationSeconds) {
-            return "\(date) · \(duration)"
+            return "\(date) \(separator) \(duration)"
         }
         return date
     }

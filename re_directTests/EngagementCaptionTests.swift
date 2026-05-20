@@ -107,4 +107,32 @@ struct EngagementCaptionTests {
         let result = EngagementCaption.caption(for: engagement, now: now, calendar: calendar)
         #expect(result == "earlier today · 5 min")
     }
+
+    @Test func captionAcceptsAlternateSeparator() {
+        let engagement = CuriosityEngagement()
+        engagement.contentTitle = "test"
+        engagement.engagedAt = daysBefore(3)
+        engagement.durationSeconds = 720
+        let result = EngagementCaption.caption(
+            for: engagement,
+            now: now,
+            calendar: calendar,
+            separator: "–"
+        )
+        #expect(result == "3 days ago – 12 min")
+    }
+
+    @Test func separatorIsIgnoredWhenDurationAbsent() {
+        let engagement = CuriosityEngagement()
+        engagement.contentTitle = "test"
+        engagement.engagedAt = daysBefore(2)
+        engagement.durationSeconds = nil
+        let result = EngagementCaption.caption(
+            for: engagement,
+            now: now,
+            calendar: calendar,
+            separator: "–"
+        )
+        #expect(result == "2 days ago")
+    }
 }
