@@ -350,10 +350,11 @@ struct DashboardView: View {
         private let topicSeeds = ["clouds", "desert", "cosmos", "dusk", "hands"]
         @State private var appeared = false
         @State private var isPressed = false
-        @Query(filter: #Predicate<TimerSession> { $0.deletedAt == nil })
-        private var sessions: [TimerSession]
-
-        private var rabbitHoleCount: Int { sessions.count }
+        // FIXME(Slice E): wire to CuriosityEngagement count once topic
+        // engagement tracking lands. A "rabbit hole" is a content-engagement
+        // event (watched, read), not a timer-start event — TimerSession
+        // rows from Slice 8 are intentionally NOT counted here.
+        private let rabbitHoleCount: Int = 0
 
         private var rabbitHoleLine: String {
             switch rabbitHoleCount {
