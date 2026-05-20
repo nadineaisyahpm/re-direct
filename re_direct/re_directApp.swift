@@ -52,9 +52,13 @@ struct re_directApp: App {
         }
     }()
 
+    @MainActor
+    static let sharedActiveMethodStore = ActiveMethodStore()
+
     var body: some Scene {
         WindowGroup {
             OnboardingView()
+                .environment(Self.sharedActiveMethodStore)
         }
         .modelContainer(Self.sharedModelContainer)
     }

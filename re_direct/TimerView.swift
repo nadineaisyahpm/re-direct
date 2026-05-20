@@ -370,6 +370,7 @@ struct TimerPickerCard<Content: View>: View {
 struct MethodSelector: View {
     @Binding var selectedMethods: Set<TimerRedirectMethod>
     @Query private var seededMethods: [RedirectMethod]
+    @Environment(ActiveMethodStore.self) private var activeMethodStore
 
     private func slug(for method: TimerRedirectMethod) -> String {
         switch method {
@@ -411,9 +412,21 @@ struct MethodSelector: View {
                 let labelColor: Color = isSelected && lightText ? .white.opacity(0.92) : DSColor.ink
 
                 Button(action: {
+                    let wasSelected = isSelected
+                    let methodSlug = slug(for: method)
                     withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
-                        if isSelected { selectedMethods.remove(method) }
-                        else          { selectedMethods.insert(method) }
+                        if wasSelected { selectedMethods.remove(method) }
+                        else           { selectedMethods.insert(method) }
+                    }
+                    // Single-active-method rule:
+                    // - toggle ON → this method becomes the active redirect method
+                    // - toggle OFF → if it was the active one, clear; otherwise no change
+                    if wasSelected {
+                        if activeMethodStore.activeRedirectMethodSlug == methodSlug {
+                            activeMethodStore.activeRedirectMethodSlug = nil
+                        }
+                    } else {
+                        activeMethodStore.activeRedirectMethodSlug = methodSlug
                     }
                 }) {
                     HStack(spacing: 12) {
@@ -922,4 +935,5 @@ struct TimerRNG: RandomNumberGenerator {
 
 #Preview {
     TimerView()
+        .environment(ActiveMethodStore())
 }

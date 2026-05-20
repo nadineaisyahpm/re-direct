@@ -108,6 +108,16 @@ struct RetualsView: View {
     @State private var isFlipped                    = false
     @State private var flipAngle: Double            = 0
 
+    @Environment(ActiveMethodStore.self) private var activeMethodStore
+
+    /// Index of the lane whose slug matches the active redirect method, or
+    /// `nil` if no method is currently active. Used by DeckPagination to
+    /// render a subtle accent on that lane's dot.
+    private var activeMethodIndex: Int? {
+        guard let slug = activeMethodStore.activeRedirectMethodSlug else { return nil }
+        return RedirectRitual.samples.firstIndex { $0.id == slug }
+    }
+
     private let swipeThreshold: CGFloat = 90
 
     private var activeRitualIndex: Int {
@@ -188,6 +198,7 @@ struct RetualsView: View {
                         DeckPagination(
                             count: RedirectRitual.samples.count,
                             activeIndex: activeRitualIndex,
+                            activeMethodIndex: activeMethodIndex,
                             onSelect: bringRitualToFront
                         )
                         .padding(.bottom, 20)
@@ -838,16 +849,22 @@ private struct PaperCircleButtonStyle: ButtonStyle {
 struct DeckPagination: View {
     let count: Int
     let activeIndex: Int
+    /// Optional: index of the lane that matches `ActiveMethodStore.activeRedirectMethodSlug`.
+    /// When provided and `i == activeMethodIndex`, the inactive dot is rendered
+    /// with a subtle cream tint instead of the default dark ink — a quiet cue
+    /// that Timer has committed to that lane, without disturbing the deck.
+    var activeMethodIndex: Int? = nil
     let onSelect: (Int) -> Void
 
     var body: some View {
         HStack(spacing: 6) {
             ForEach(0..<max(count, 0), id: \.self) { i in
+                let isActive = i == activeIndex
+                let isActiveMethod = activeMethodIndex == i
+
                 Button {
                     onSelect(i)
                 } label: {
-                    let isActive = i == activeIndex
-
                     if isActive {
                         Capsule()
                             .fill(DSColor.ink.opacity(0.65))
@@ -866,13 +883,22 @@ struct DeckPagination: View {
                             .animation(.spring(duration: 0.35, bounce: 0.2), value: activeIndex)
                     } else {
                         Circle()
-                            .fill(Color(hex: "#1F1B18").opacity(0.35))
+                            .fill(
+                                isActiveMethod
+                                    ? DSColor.highlightYellow.opacity(0.85)
+                                    : Color(hex: "#1F1B18").opacity(0.35)
+                            )
                             .frame(width: 8, height: 8)
                             .animation(.spring(duration: 0.35, bounce: 0.2), value: activeIndex)
+                            .animation(.smooth, value: isActiveMethod)
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Show ritual \(i + 1)")
+                .accessibilityLabel(
+                    isActiveMethod
+                        ? "Show ritual \(i + 1), active redirect method"
+                        : "Show ritual \(i + 1)"
+                )
             }
         }
         .padding(.horizontal, 12)
@@ -1373,4 +1399,5 @@ enum EngagementCaption {
 
 #Preview {
     RetualsView()
+        .environment(ActiveMethodStore())
 }
