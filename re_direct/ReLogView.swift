@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // ─────────────────────────────────────────────
 // MARK: - Re:Log View
@@ -8,6 +9,7 @@ struct ReLogView: View {
 
     @State private var revealed = false
     @State private var selectedTopic: ReDirectTopic? = nil
+    @State private var showLogSheet = false
 
     var body: some View {
         GeometryReader { geo in
@@ -31,6 +33,43 @@ struct ReLogView: View {
                             .opacity(revealed ? 1 : 0)
                             .offset(y: revealed ? 0 : 10)
                             .animation(.smooth.delay(0.05), value: revealed)
+
+                        HStack {
+                            Spacer()
+                            Button {
+                                showLogSheet = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 12, weight: .regular))
+                                    Text("log a rabbit hole")
+                                        .font(.custom("InstrumentSerif-Italic", size: 15))
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .foregroundColor(DSColor.ink)
+                                .background {
+                                    Capsule()
+                                        .fill(.ultraThinMaterial)
+                                        .overlay {
+                                            Capsule()
+                                                .fill(Color.white.opacity(0.45))
+                                        }
+                                        .overlay {
+                                            Capsule()
+                                                .stroke(DSColor.ink.opacity(0.30), lineWidth: 1)
+                                        }
+                                        .shadow(color: DSColor.ink.opacity(0.10),
+                                                radius: 0, x: 1, y: 1)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 14)
+                        .opacity(revealed ? 1 : 0)
+                        .offset(y: revealed ? 0 : 6)
+                        .animation(.smooth.delay(0.10), value: revealed)
 
                         TopFiveSection(
                             topics: ReDirectTopicData.topFive,
@@ -68,6 +107,227 @@ struct ReLogView: View {
         .onAppear {
             withAnimation { revealed = true }
         }
+        .sheet(isPresented: $showLogSheet) {
+            LogRabbitHoleSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Log Rabbit Hole Input (testable)
+// ─────────────────────────────────────────────
+
+/// Pure data + validation for the "log a rabbit hole" flow.
+/// Extracted so behavior can be tested without instantiating SwiftUI views
+/// or SwiftData containers.
+struct LogRabbitHoleInput: Equatable {
+    var title: String = ""
+    var methodSlug: String = "read"
+    var durationMinutes: Int = 15
+
+    static let canonicalMethodSlugs: [String] = [
+        "watch", "read", "mini-game", "reflect", "deep-dive"
+    ]
+
+    static let durationChoices: [Int] = [5, 10, 15, 20, 30, 45, 60]
+
+    var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isValid: Bool {
+        trimmedTitle.count >= 3
+            && Self.canonicalMethodSlugs.contains(methodSlug)
+            && durationMinutes > 0
+    }
+
+    func makeEngagement(at date: Date = Date()) -> CuriosityEngagement {
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = methodSlug
+        engagement.contentTitle = trimmedTitle
+        engagement.durationSeconds = durationMinutes * 60
+        engagement.engagedAt = date
+        return engagement
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Log Rabbit Hole Sheet
+// ─────────────────────────────────────────────
+
+private struct LogRabbitHoleSheet: View {
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+
+    @State private var input = LogRabbitHoleInput()
+    @State private var savedId: UUID? = nil
+    @FocusState private var titleFocused: Bool
+
+    private let methodLabels: [(slug: String, label: String)] = [
+        ("watch",     "Watch"),
+        ("read",      "Read"),
+        ("mini-game", "Mini Game"),
+        ("reflect",   "Reflect"),
+        ("deep-dive", "Deep Dive")
+    ]
+
+    var body: some View {
+        ZStack {
+            PaperBackground(variant: .warm)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 0) {
+
+                HStack {
+                    Button("cancel") { dismiss() }
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(DSColor.ink.opacity(0.55))
+
+                    Spacer()
+
+                    Button("save") { save() }
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(input.isValid ? DSColor.ink : DSColor.ink.opacity(0.28))
+                        .disabled(!input.isValid)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 22)
+
+                Text("a rabbit hole, logged.")
+                    .font(.custom("InstrumentSerif-Italic", size: 28))
+                    .foregroundColor(DSColor.ink)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 22)
+
+                titleField
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+
+                methodPicker
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 16)
+
+                durationPicker
+                    .padding(.horizontal, 24)
+
+                Spacer(minLength: 0)
+            }
+        }
+        .sensoryFeedback(.impact(weight: .medium), trigger: savedId)
+        .onAppear { titleFocused = true }
+    }
+
+    private var titleField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("what did you fall into?")
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(DSColor.ink.opacity(0.55))
+                .tracking(0.1)
+
+            TextField(
+                "e.g. why deep-sea creatures glow blue",
+                text: $input.title,
+                axis: .horizontal
+            )
+            .font(.custom("InstrumentSerif-Italic", size: 19))
+            .foregroundColor(DSColor.ink)
+            .submitLabel(.done)
+            .focused($titleFocused)
+            .onSubmit { if input.isValid { save() } }
+        }
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.40))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
+                }
+        }
+    }
+
+    private var methodPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("which lane?")
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(DSColor.ink.opacity(0.55))
+                .tracking(0.1)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(methodLabels, id: \.slug) { entry in
+                        chip(
+                            label: entry.label,
+                            isSelected: input.methodSlug == entry.slug
+                        ) {
+                            input.methodSlug = entry.slug
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var durationPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("how long?")
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(DSColor.ink.opacity(0.55))
+                .tracking(0.1)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(LogRabbitHoleInput.durationChoices, id: \.self) { mins in
+                        chip(
+                            label: "\(mins)m",
+                            isSelected: input.durationMinutes == mins
+                        ) {
+                            input.durationMinutes = mins
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func chip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .foregroundColor(isSelected ? .white : DSColor.ink)
+                .background {
+                    Capsule()
+                        .fill(isSelected ? DSColor.ink.opacity(0.85) : Color.white.opacity(0.55))
+                        .overlay {
+                            Capsule()
+                                .stroke(DSColor.ink.opacity(isSelected ? 0.45 : 0.25), lineWidth: 1)
+                        }
+                        .shadow(color: DSColor.ink.opacity(0.06),
+                                radius: 0, x: 1, y: 1)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func save() {
+        guard input.isValid else { return }
+        let engagement = input.makeEngagement()
+        context.insert(engagement)
+        try? context.save()
+        savedId = engagement.id
+        dismiss()
     }
 }
 
