@@ -17,6 +17,7 @@ enum ReDirectSchema {
         TrackedAppSelection.self,
         ScreenTimeSummary.self,
         AIRecommendation.self,
+        CuriosityEngagement.self,
     ]
 
     @MainActor
