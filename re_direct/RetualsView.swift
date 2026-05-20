@@ -106,6 +106,7 @@ struct RetualsView: View {
     @State private var dragOffset: CGSize           = .zero
     @State private var isAnimatingOut               = false
     @State private var isFlipped                    = false
+    @State private var flipAngle: Double            = 0
 
     private let swipeThreshold: CGFloat = 90
 
@@ -117,6 +118,7 @@ struct RetualsView: View {
     private func bringRitualToFront(_ index: Int) {
         guard RedirectRitual.samples.indices.contains(index) else { return }
         isFlipped = false
+        flipAngle = 0
         let samples = RedirectRitual.samples
         let reordered = Array(samples[index...]) + Array(samples[..<index])
         withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
@@ -128,6 +130,7 @@ struct RetualsView: View {
     private func sendTopCardToBack(direction: CGFloat) {
         guard !rituals.isEmpty else { return }
         isFlipped = false
+        flipAngle = 0
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             dragOffset = CGSize(width: direction * 600, height: 40)
             isAnimatingOut = true
@@ -176,6 +179,7 @@ struct RetualsView: View {
                             dragOffset: $dragOffset,
                             isAnimatingOut: $isAnimatingOut,
                             isFlipped: $isFlipped,
+                            flipAngle: $flipAngle,
                             swipeThreshold: swipeThreshold,
                             onSwipe: sendTopCardToBack
                         )
@@ -193,6 +197,7 @@ struct RetualsView: View {
                             onShuffle: { sendTopCardToBack(direction: -1) },
                             onChoose: {
                                 isFlipped = false
+                                flipAngle = 0
                                 if let top = rituals.first {
                                     withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
                                         selectedRitual = top
@@ -340,11 +345,11 @@ struct RitualDeck: View {
     @Binding var dragOffset: CGSize
     @Binding var isAnimatingOut: Bool
     @Binding var isFlipped: Bool
+    @Binding var flipAngle: Double
     let swipeThreshold: CGFloat
     let onSwipe: (CGFloat) -> Void
 
     @State private var isDragging = false
-    @State private var flipAngle: Double = 0
 
     private var dragGesture: some Gesture {
         DragGesture()
@@ -512,11 +517,14 @@ struct RitualDeck: View {
             }
         }
         .onTapGesture {
-            isFlipped.toggle()
-        }
-        .onChange(of: isFlipped) { _, newValue in
+            // Drive isFlipped and flipAngle in the same transaction. Using
+            // .onChange here is unsafe — the parent branches on isFlipped, so
+            // toggling it can recreate the view before the change observer
+            // fires, leaving flipAngle at 0 and the rotation visually static.
+            let next = !isFlipped
+            isFlipped = next
             withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
-                flipAngle = newValue ? 180 : 0
+                flipAngle = next ? 180 : 0
             }
         }
 
