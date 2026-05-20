@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 // ─────────────────────────────────────────────
 // MARK: - Data Models
@@ -368,6 +369,25 @@ struct TimerPickerCard<Content: View>: View {
 
 struct MethodSelector: View {
     @Binding var selectedMethods: Set<TimerRedirectMethod>
+    @Query private var seededMethods: [RedirectMethod]
+
+    private func slug(for method: TimerRedirectMethod) -> String {
+        switch method {
+        case .watch:    return "watch"
+        case .read:     return "read"
+        case .miniGame: return "mini-game"
+        case .reflect:  return "reflect"
+        case .deepDive: return "deep-dive"
+        }
+    }
+
+    private func label(for method: TimerRedirectMethod) -> String {
+        let s = slug(for: method)
+        if let seeded = seededMethods.first(where: { $0.slug == s }), !seeded.displayName.isEmpty {
+            return seeded.displayName
+        }
+        return method.rawValue
+    }
 
     private func cardColor(for method: TimerRedirectMethod) -> Color {        switch method {
         case .watch:    return Color(hex: "#B8A8B0")
@@ -408,7 +428,7 @@ struct MethodSelector: View {
                                 .frame(width: 26, height: 26)
                         }
 
-                        Text(method.rawValue)
+                        Text(label(for: method))
                             .font(.custom("InstrumentSerif-Italic", size: 17))
                             .foregroundColor(labelColor)
 
