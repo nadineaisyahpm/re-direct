@@ -34,3 +34,23 @@ Curated curiosity content shipped in the app bundle. AI-bootstrapped, human-revi
 - Runtime AI output (kept in `AIRecommendation` rows only).
 - Per-user data of any kind.
 - Assets — assets are added to the Asset Catalog and referenced by name.
+
+## Slug contracts
+
+Some seed fields are *contracts* — the slug must match a value the app recognizes, otherwise the row imports into SwiftData but is silently dropped by the UI layer.
+
+### `redirect_methods[].slug`
+
+Must be one of the canonical set, mirroring `TimerRedirectMethod` cases in `TimerView.swift`:
+
+- `watch`
+- `read`
+- `mini-game`
+- `reflect`
+- `deep-dive`
+
+Anything else imports but never surfaces in `MethodSelector`.
+
+`display_name` for these entries intentionally matches `TimerRedirectMethod.rawValue` (`Watch`, `Read`, `Mini Game`, `Reflect`, `Deep Dive`) so the Timer screen reads identically until a future slice surfaces seeded copy. The slug is the only contract; `display_name` and `summary` are editorial and can change without code changes.
+
+Drift in this set is caught at test time by `bundledRedirectMethodSlugsMatchCanonicalSet` in `re_directTests/SeedImporterTests.swift`.

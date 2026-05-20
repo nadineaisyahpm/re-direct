@@ -65,7 +65,6 @@
     { "slug": "warm-paper", "display_name": "Warm Paper", "asset_name": "Reminder_WarmPaper" },
     { "slug": "deep-teal", "display_name": "Deep Teal", "asset_name": "Reminder_DeepTeal" }
   ],
-  "_comment_redirect_methods": "display_name intentionally matches TimerRedirectMethod.rawValue — content overrides arrive in a later slice.",
   "redirect_methods": [
     { "slug": "watch", "display_name": "Watch", "summary": "Let a short documentary lead you somewhere unexpected." },
     { "slug": "read", "display_name": "Read", "summary": "Open a long-form piece instead of the next short post." },
