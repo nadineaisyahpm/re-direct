@@ -350,6 +350,10 @@ struct DashboardView: View {
         private let topicSeeds = ["clouds", "desert", "cosmos", "dusk", "hands"]
         @State private var appeared = false
         @State private var isPressed = false
+        @Query(filter: #Predicate<TimerSession> { $0.deletedAt == nil })
+        private var sessions: [TimerSession]
+
+        private var rabbitHoleCount: Int { sessions.count }
 
         var body: some View {
             Button(action: { print("re:log widget tapped") }) {
@@ -399,7 +403,7 @@ struct DashboardView: View {
 
                             Spacer().frame(height: 8)
 
-                            Text("through 10\nrabbit holes.")
+                            Text("through \(rabbitHoleCount)\nrabbit holes.")
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundColor(Color(hex: "#2C2825").opacity(0.72))
                                 .lineSpacing(2)
@@ -482,7 +486,7 @@ struct DashboardView: View {
                     .onChanged { _ in isPressed = true }
                     .onEnded   { _ in isPressed = false }
             )
-            .accessibilityLabel("re:log — your mind wandered through 10 rabbit holes this week. Tap to explore your curiosity trail.")
+            .accessibilityLabel("re:log — your mind wandered through \(rabbitHoleCount) rabbit holes this week. Tap to explore your curiosity trail.")
             .onAppear {
                 withAnimation { appeared = true }
             }
