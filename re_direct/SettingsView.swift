@@ -250,7 +250,7 @@ struct SettingsView: View {
                 captionAlignment: .trailing
             )
 
-            VStack(spacing: 1.5) {
+            VStack(spacing: 6) {
                 content()
             }
         }
@@ -309,16 +309,16 @@ private struct SettingsRow<Trailing: View>: View {
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: 34, style: .continuous)
                 .fill(DSColor.paperCream)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    RoundedRectangle(cornerRadius: 34, style: .continuous)
                         .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
                 }
                 .shadow(color: DSColor.ink.opacity(0.10),
                         radius: 0, x: 1.0, y: 1.0)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
     }
 }
 
