@@ -10,7 +10,10 @@ import SwiftData
 /// controls in S1. Toggles arrive slice-by-slice as backing behavior lands.
 struct SettingsView: View {
 
+    @Environment(\.modelContext) private var modelContext
+
     @State private var revealed = false
+    @State private var pendingAction: DataAction? = nil
 
     @Query private var topics: [CuriosityTopic]
     @Query(filter: #Predicate<CuriosityEngagement> { $0.deletedAt == nil })
@@ -21,6 +24,46 @@ struct SettingsView: View {
     private var reflections: [ReflectionEntry]
 
     @AppStorage("redirect.seed.installed_version") private var installedSeedVersion: Int = 0
+
+    /// A single, confirmable, on-device mutation. Each case carries its own
+    /// editorial copy so the confirmation dialog can stay declarative.
+    enum DataAction: Identifiable {
+        case clearRabbitHoles
+        case clearBoundarySessions
+        case clearReflections
+        case resetSeedVersion
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .clearRabbitHoles:      return "Clear rabbit holes?"
+            case .clearBoundarySessions: return "Clear boundary sessions?"
+            case .clearReflections:      return "Clear reflections?"
+            case .resetSeedVersion:      return "Reset seed version?"
+            }
+        }
+
+        var message: String {
+            switch self {
+            case .clearRabbitHoles:
+                return "This hides your logged rabbit holes on this device. Seeded curiosity content stays."
+            case .clearBoundarySessions:
+                return "This hides your boundary session history on this device."
+            case .clearReflections:
+                return "This hides your saved reflections on this device."
+            case .resetSeedVersion:
+                return "Seed content will import again on next launch. Your rabbit holes and sessions stay untouched."
+            }
+        }
+
+        var confirmLabel: String {
+            switch self {
+            case .resetSeedVersion: return "Reset"
+            default:                return "Clear"
+            }
+        }
+    }
 
     private let buildLabel = "build 26.05.21"
     private let prototypeLabel = "prototype 0.3.1"
@@ -176,9 +219,44 @@ struct SettingsView: View {
                         }
 
                         section(
+                            title: "Local data controls",
+                            caption: "soft-delete · stays on this device",
+                            delay: 0.52
+                        ) {
+                            SettingsRow(icon: "archivebox",
+                                        label: "clear rabbit holes",
+                                        hint: "soft-delete · sets deletedAt") {
+                                actionPill("clear", enabled: !engagements.isEmpty) {
+                                    pendingAction = .clearRabbitHoles
+                                }
+                            }
+                            SettingsRow(icon: "archivebox",
+                                        label: "clear boundary sessions",
+                                        hint: "soft-delete · sets deletedAt") {
+                                actionPill("clear", enabled: !sessions.isEmpty) {
+                                    pendingAction = .clearBoundarySessions
+                                }
+                            }
+                            SettingsRow(icon: "archivebox",
+                                        label: "clear reflections",
+                                        hint: "soft-delete · sets deletedAt") {
+                                actionPill("clear", enabled: !reflections.isEmpty) {
+                                    pendingAction = .clearReflections
+                                }
+                            }
+                            SettingsRow(icon: "arrow.clockwise",
+                                        label: "reset seed version",
+                                        hint: "clears AppStorage key") {
+                                actionPill("reset", enabled: installedSeedVersion > 0) {
+                                    pendingAction = .resetSeedVersion
+                                }
+                            }
+                        }
+
+                        section(
                             title: "About",
                             caption: "this app",
-                            delay: 0.56
+                            delay: 0.60
                         ) {
                             SettingsRow(icon: "bookmark",
                                         label: "current slice",
@@ -206,6 +284,27 @@ struct SettingsView: View {
             .ignoresSafeArea()
         }
         .preferredColorScheme(.light)
+        .confirmationDialog(
+            pendingAction?.title ?? "",
+            isPresented: Binding(
+                get: { pendingAction != nil },
+                set: { presented in
+                    if !presented { pendingAction = nil }
+                }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingAction
+        ) { action in
+            Button(action.confirmLabel, role: .destructive) {
+                perform(action)
+                pendingAction = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingAction = nil
+            }
+        } message: { action in
+            Text(action.message)
+        }
         .onAppear {
             withAnimation { revealed = true }
         }
@@ -297,6 +396,54 @@ struct SettingsView: View {
             .lineLimit(1)
             .truncationMode(.middle)
             .minimumScaleFactor(0.82)
+    }
+
+    /// Small destructive-but-calm action pill. Reuses the dusty-rose tint
+    /// that `StatusChip.pending` already uses, so destructive intent reads
+    /// without resorting to emergency red. Disables itself when there is
+    /// nothing to act on, so the user never confirms a no-op.
+    @ViewBuilder
+    private func actionPill(_ label: String,
+                            enabled: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundColor(DSColor.ink.opacity(enabled ? 0.82 : 0.40))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background {
+                    Capsule()
+                        .fill(Color(hex: "#F4E2DC")
+                                .opacity(enabled ? 1.0 : 0.55))
+                        .overlay {
+                            Capsule()
+                                .stroke(DSColor.ink.opacity(enabled ? 0.32 : 0.18),
+                                        lineWidth: 1)
+                        }
+                        .shadow(color: DSColor.ink.opacity(enabled ? 0.14 : 0.0),
+                                radius: 0, x: 1.5, y: 1.5)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    // MARK: mutations
+
+    private func perform(_ action: DataAction) {
+        let now = Date()
+        switch action {
+        case .clearRabbitHoles:
+            for row in engagements { row.deletedAt = now }
+        case .clearBoundarySessions:
+            for row in sessions { row.deletedAt = now }
+        case .clearReflections:
+            for row in reflections { row.deletedAt = now }
+        case .resetSeedVersion:
+            installedSeedVersion = 0
+        }
+        try? modelContext.save()
     }
 }
 
