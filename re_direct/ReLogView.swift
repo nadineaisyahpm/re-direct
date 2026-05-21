@@ -89,6 +89,13 @@ struct ReLogView: View {
                                 )
                         }
 
+                        RecentRabbitHolesSection(revealed: revealed)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 26)
+                            .opacity(revealed ? 1 : 0)
+                            .offset(y: revealed ? 0 : 12)
+                            .animation(.smooth.delay(0.55), value: revealed)
+
                         ScreenTimeSection(revealed: revealed)
                             .padding(.horizontal, 24)
                             .padding(.top, 22)
@@ -605,6 +612,124 @@ struct LiquidStatChip: View {
                     }
             }
             .shadow(color: .black.opacity(0.045), radius: 5, x: 0, y: 2)
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Recent Rabbit Holes Section
+// ─────────────────────────────────────────────
+
+/// A ledger of the user's most recent CuriosityEngagement rows. Read-only,
+/// editorial-typography list — not a dashboard.
+struct RecentRabbitHolesSection: View {
+
+    let revealed: Bool
+
+    @Query(
+        filter: #Predicate<CuriosityEngagement> { $0.deletedAt == nil },
+        sort: \.engagedAt,
+        order: .reverse
+    )
+    private var engagements: [CuriosityEngagement]
+
+    private var visibleRows: [CuriosityEngagement] {
+        Array(engagements.prefix(5))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            SectionHeader(
+                title: "Rabbit holes",
+                caption: "what you've fallen into",
+                captionAlignment: .trailing
+            )
+            .padding(.bottom, 12)
+
+            if engagements.isEmpty {
+                emptyState
+            } else {
+                populatedList
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("no rabbit holes logged yet.")
+                .font(.custom("InstrumentSerif-Italic", size: 17))
+                .foregroundColor(DSColor.ink.opacity(0.70))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("tap + log above to record one.")
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(DSColor.ink.opacity(0.45))
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var populatedList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(visibleRows.enumerated()), id: \.element.id) { idx, engagement in
+                if idx > 0 {
+                    Rectangle()
+                        .fill(DSColor.ink.opacity(0.12))
+                        .frame(height: 0.5)
+                }
+                engagementRow(engagement)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func engagementRow(_ engagement: CuriosityEngagement) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(engagement.contentTitle)
+                .font(.custom("InstrumentSerif-Italic", size: 17))
+                .foregroundColor(DSColor.ink)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                methodChip(slug: engagement.methodSlug)
+                Text(EngagementCaption.caption(for: engagement))
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(DSColor.ink.opacity(0.55))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func methodChip(slug: String) -> some View {
+        Text(RecentRabbitHolesSection.displayLabel(for: slug))
+            .font(.custom("InstrumentSerif-Italic", size: 11))
+            .foregroundColor(DSColor.ink.opacity(0.72))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background {
+                Capsule()
+                    .fill(Color(hex: "#FFFDF2").opacity(0.85))
+                    .overlay {
+                        Capsule()
+                            .stroke(DSColor.ink.opacity(0.22), lineWidth: 0.5)
+                    }
+            }
+    }
+
+    /// Editorial lowercase label for a method slug. Static + pure so it can be
+    /// unit-tested in isolation.
+    static func displayLabel(for slug: String) -> String {
+        switch slug {
+        case "watch":     return "watch"
+        case "read":      return "read"
+        case "mini-game": return "mini game"
+        case "reflect":   return "reflect"
+        case "deep-dive": return "deep dive"
+        default:          return slug
+        }
     }
 }
 
