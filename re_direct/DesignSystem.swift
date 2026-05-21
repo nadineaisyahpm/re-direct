@@ -169,15 +169,16 @@ struct ChipCapsule: View {
 // MARK: - Status Chip
 // ─────────────────────────────────────────────
 
-/// Small read-only status pill for `SettingsView` rows. Five variants
-/// share the same paper-card shape, 1px ink hairline, and 1.5/1.5 hard
-/// shadow used by other paper objects in the design system. A 6pt dot
-/// prefix appears for `.positive` to read as a status light.
+/// Small read-only status pill. Five variants share the paper-cream / ink-
+/// stroke / 1.5pt hard-shadow language used by every other "paper-glass"
+/// object in the design system — the re:tuals lane label pill, the Timer
+/// "preview" pill, the re:log row chips. No status-light dots, no leading
+/// glyphs; the variant's tint carries the meaning.
 struct StatusChip: View {
     enum Variant {
         case paper       // cream, default — neutral status
-        case positive    // faint teal with leading dot — "ready" / "none"
-        case muted       // low-opacity ink — "off"
+        case positive    // faint teal-cream — "ready" / "none"
+        case muted       // low-opacity ink on softened cream — "off"
         case pending     // dusty rose tint — capability not yet enabled
         case highlight   // #F2EFB8 — reserved for current slice marker
     }
@@ -185,50 +186,39 @@ struct StatusChip: View {
     let text: String
     var variant: Variant = .paper
 
-    private var palette: (bg: Color, fg: Color, stroke: Color, dot: Color?) {
+    private var fill: Color {
         switch variant {
-        case .paper:
-            return (DSColor.paperCream, DSColor.ink.opacity(0.78),
-                    DSColor.ink.opacity(0.32), nil)
-        case .positive:
-            return (Color(hex: "#E4EEEA"), DSColor.ink.opacity(0.78),
-                    DSColor.ink.opacity(0.28), Color(hex: "#1B4D4A"))
-        case .muted:
-            return (DSColor.paperCream.opacity(0.45), DSColor.ink.opacity(0.45),
-                    DSColor.ink.opacity(0.22), nil)
-        case .pending:
-            return (Color(hex: "#F4E2DC"), DSColor.ink.opacity(0.72),
-                    DSColor.ink.opacity(0.28), nil)
-        case .highlight:
-            return (DSColor.highlightYellowSoft, DSColor.ink,
-                    DSColor.ink.opacity(0.34), nil)
+        case .paper:     return DSColor.paperCream
+        case .positive:  return Color(hex: "#E4EEEA")
+        case .muted:     return DSColor.paperCream.opacity(0.55)
+        case .pending:   return Color(hex: "#F4E2DC")
+        case .highlight: return DSColor.highlightYellowSoft
+        }
+    }
+
+    private var foreground: Color {
+        switch variant {
+        case .muted: return DSColor.ink.opacity(0.50)
+        default:     return DSColor.ink.opacity(0.82)
         }
     }
 
     var body: some View {
-        let p = palette
-        HStack(spacing: 5) {
-            if let dot = p.dot {
-                Circle()
-                    .fill(dot)
-                    .frame(width: 6, height: 6)
+        Text(text)
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundColor(foreground)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background {
+                Capsule()
+                    .fill(fill)
+                    .overlay {
+                        Capsule()
+                            .stroke(DSColor.ink.opacity(0.32), lineWidth: 1)
+                    }
+                    .shadow(color: DSColor.ink.opacity(0.14),
+                            radius: 0, x: 1.5, y: 1.5)
             }
-            Text(text)
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundColor(p.fg)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background {
-            Capsule()
-                .fill(p.bg)
-                .overlay {
-                    Capsule()
-                        .stroke(p.stroke, lineWidth: 1)
-                }
-                .shadow(color: DSColor.ink.opacity(0.14),
-                        radius: 0, x: 1.5, y: 1.5)
-        }
     }
 }
 

@@ -47,7 +47,6 @@ struct SettingsView: View {
                             .animation(.smooth.delay(0.08), value: revealed)
 
                         section(
-                            numeral: "I",
                             title: "Local data",
                             caption: "what you own",
                             delay: 0.16
@@ -56,17 +55,14 @@ struct SettingsView: View {
                                         hint: "CuriosityEngagement") {
                                 italicValue("\(engagements.count)")
                             }
-                            divider
                             SettingsRow(label: "boundary sessions",
                                         hint: "TimerSession") {
                                 italicValue("\(sessions.count)")
                             }
-                            divider
                             SettingsRow(label: "seeded topics",
                                         hint: "CuriosityTopic") {
                                 italicValue("\(topics.count)")
                             }
-                            divider
                             SettingsRow(label: "storage",
                                         hint: "derived sum · helper TBD") {
                                 italicValue("—")
@@ -74,7 +70,6 @@ struct SettingsView: View {
                         }
 
                         section(
-                            numeral: "II",
                             title: "Privacy",
                             caption: "what leaves this device",
                             delay: 0.24
@@ -83,17 +78,14 @@ struct SettingsView: View {
                                         hint: "logged out of process") {
                                 StatusChip(text: "none", variant: .positive)
                             }
-                            divider
                             SettingsRow(label: "apple identity",
                                         hint: "AfterFirstUnlockThisDeviceOnly") {
                                 italicValue("this device only")
                             }
-                            divider
                             SettingsRow(label: "AI proxy",
                                         hint: "provider-agnostic · Phase 6") {
                                 italicValue("not configured")
                             }
-                            divider
                             SettingsRow(label: "analytics",
                                         hint: nil) {
                                 StatusChip(text: "off", variant: .muted)
@@ -101,7 +93,6 @@ struct SettingsView: View {
                         }
 
                         section(
-                            numeral: "III",
                             title: "Seed content",
                             caption: "curated curiosity",
                             delay: 0.32
@@ -112,12 +103,10 @@ struct SettingsView: View {
                                             ? "v\(installedSeedVersion)"
                                             : "—")
                             }
-                            divider
                             SettingsRow(label: "last refreshed",
                                         hint: "import timestamp · helper TBD") {
                                 italicValue("—")
                             }
-                            divider
                             SettingsRow(label: "locale",
                                         hint: "BCP-47") {
                                 italicValue("en-US")
@@ -125,7 +114,6 @@ struct SettingsView: View {
                         }
 
                         section(
-                            numeral: "IV",
                             title: "Sign in with Apple",
                             caption: "identity surface",
                             delay: 0.40
@@ -134,12 +122,10 @@ struct SettingsView: View {
                                         hint: "AppleSignInCoordinator") {
                                 StatusChip(text: "ready", variant: .positive)
                             }
-                            divider
                             SettingsRow(label: "capability",
                                         hint: "manual Xcode step · Slice 7.1") {
                                 StatusChip(text: "not enabled", variant: .pending)
                             }
-                            divider
                             SettingsRow(label: "keychain",
                                         hint: "KeychainAppleIDStore") {
                                 italicValue("ready")
@@ -147,7 +133,6 @@ struct SettingsView: View {
                         }
 
                         section(
-                            numeral: "V",
                             title: "Screen Time",
                             caption: "platform research",
                             delay: 0.48
@@ -156,12 +141,10 @@ struct SettingsView: View {
                                         hint: "Phase 7 spike") {
                                 italicValue("not integrated")
                             }
-                            divider
                             SettingsRow(label: "FamilyControls",
                                         hint: "Phase 7 spike") {
                                 italicValue("not integrated")
                             }
-                            divider
                             SettingsRow(label: "fallback signal",
                                         hint: "user-declared CuriosityEngagement") {
                                 StatusChip(text: "ready", variant: .positive)
@@ -169,7 +152,6 @@ struct SettingsView: View {
                         }
 
                         section(
-                            numeral: "VI",
                             title: "About",
                             caption: "this app",
                             delay: 0.56
@@ -178,12 +160,10 @@ struct SettingsView: View {
                                         hint: "see docs/ROADMAP.md") {
                                 StatusChip(text: currentSliceLabel, variant: .highlight)
                             }
-                            divider
                             SettingsRow(label: "privacy policy",
                                         hint: nil) {
                                 italicValue("your data, your device.")
                             }
-                            divider
                             SettingsRow(label: "build",
                                         hint: nil) {
                                 italicValue(buildLabel.replacingOccurrences(of: "build ",
@@ -228,39 +208,36 @@ struct SettingsView: View {
     // MARK: identity strip
 
     private var identityStrip: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(Color(hex: "#1B4D4A"))
-                .frame(width: 6, height: 6)
-
-            Text("local-first · \(prototypeLabel) · \(buildLabel)")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(DSColor.ink.opacity(0.65))
-                .tracking(0.1)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule()
-                        .fill(Color.white.opacity(0.40))
-                }
-                .overlay {
-                    Capsule()
-                        .stroke(DSColor.ink.opacity(0.22), lineWidth: 0.5)
-                }
-                .shadow(color: DSColor.ink.opacity(0.08),
-                        radius: 0, x: 1, y: 1)
-        }
+        Text("local-first · \(prototypeLabel) · \(buildLabel)")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(DSColor.ink.opacity(0.65))
+            .tracking(0.1)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule()
+                            .fill(Color.white.opacity(0.40))
+                    }
+                    .overlay {
+                        Capsule()
+                            .stroke(DSColor.ink.opacity(0.22), lineWidth: 0.5)
+                    }
+                    .shadow(color: DSColor.ink.opacity(0.10),
+                            radius: 0, x: 1, y: 1)
+            }
     }
 
     // MARK: section template
 
+    /// A section header followed by a vertical stack of independent
+    /// paper-glass rows. The tight 1.5pt spacing keeps the rows reading
+    /// as a connected group while letting each one carry its own
+    /// fill / stroke / hard shadow.
     @ViewBuilder
     private func section<Content: View>(
-        numeral: String,
         title: String,
         caption: String,
         delay: Double,
@@ -270,18 +247,12 @@ struct SettingsView: View {
             SectionHeader(
                 title: title,
                 caption: caption,
-                captionAlignment: .trailing,
-                numeral: numeral
+                captionAlignment: .trailing
             )
 
-            VStack(spacing: 0) {
+            VStack(spacing: 1.5) {
                 content()
             }
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(DSColor.paperCream)
-            }
-            .inkCard(cornerRadius: 14)
         }
         .padding(.bottom, 22)
         .opacity(revealed ? 1 : 0)
@@ -290,13 +261,6 @@ struct SettingsView: View {
     }
 
     // MARK: row primitives
-
-    private var divider: some View {
-        Rectangle()
-            .fill(DSColor.ink.opacity(0.10))
-            .frame(height: 1)
-            .padding(.horizontal, 16)
-    }
 
     @ViewBuilder
     private func italicValue(_ text: String) -> some View {
@@ -342,8 +306,19 @@ private struct SettingsRow<Trailing: View>: View {
             trailing()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .contentShape(Rectangle())
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(DSColor.paperCream)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
+                }
+                .shadow(color: DSColor.ink.opacity(0.10),
+                        radius: 0, x: 1.0, y: 1.0)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
