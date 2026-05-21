@@ -51,19 +51,23 @@ struct SettingsView: View {
                             caption: "what you own",
                             delay: 0.16
                         ) {
-                            SettingsRow(label: "rabbit holes",
+                            SettingsRow(icon: "tray.full",
+                                        label: "rabbit holes",
                                         hint: "CuriosityEngagement") {
                                 italicValue("\(engagements.count)")
                             }
-                            SettingsRow(label: "boundary sessions",
+                            SettingsRow(icon: "hourglass.bottomhalf.filled",
+                                        label: "boundary sessions",
                                         hint: "TimerSession") {
                                 italicValue("\(sessions.count)")
                             }
-                            SettingsRow(label: "seeded topics",
+                            SettingsRow(icon: "leaf",
+                                        label: "seeded topics",
                                         hint: "CuriosityTopic") {
                                 italicValue("\(topics.count)")
                             }
-                            SettingsRow(label: "storage",
+                            SettingsRow(icon: "internaldrive",
+                                        label: "storage",
                                         hint: "derived sum · helper TBD") {
                                 italicValue("—")
                             }
@@ -74,19 +78,23 @@ struct SettingsView: View {
                             caption: "what leaves this device",
                             delay: 0.24
                         ) {
-                            SettingsRow(label: "network calls this week",
+                            SettingsRow(icon: "antenna.radiowaves.left.and.right.slash",
+                                        label: "network calls this week",
                                         hint: "logged out of process") {
                                 StatusChip(text: "none", variant: .positive)
                             }
-                            SettingsRow(label: "apple identity",
+                            SettingsRow(icon: "lock.shield",
+                                        label: "apple identity",
                                         hint: "AfterFirstUnlockThisDeviceOnly") {
                                 italicValue("this device only")
                             }
-                            SettingsRow(label: "AI proxy",
+                            SettingsRow(icon: "sparkles",
+                                        label: "AI proxy",
                                         hint: "provider-agnostic · Phase 6") {
                                 italicValue("not configured")
                             }
-                            SettingsRow(label: "analytics",
+                            SettingsRow(icon: "chart.bar.xaxis",
+                                        label: "analytics",
                                         hint: nil) {
                                 StatusChip(text: "off", variant: .muted)
                             }
@@ -97,17 +105,20 @@ struct SettingsView: View {
                             caption: "curated curiosity",
                             delay: 0.32
                         ) {
-                            SettingsRow(label: "current seed version",
+                            SettingsRow(icon: "leaf.circle",
+                                        label: "current seed version",
                                         hint: nil) {
                                 italicValue(installedSeedVersion > 0
                                             ? "v\(installedSeedVersion)"
                                             : "—")
                             }
-                            SettingsRow(label: "last refreshed",
+                            SettingsRow(icon: "clock.arrow.circlepath",
+                                        label: "last refreshed",
                                         hint: "import timestamp · helper TBD") {
                                 italicValue("—")
                             }
-                            SettingsRow(label: "locale",
+                            SettingsRow(icon: "globe",
+                                        label: "locale",
                                         hint: "BCP-47") {
                                 italicValue("en-US")
                             }
@@ -118,15 +129,18 @@ struct SettingsView: View {
                             caption: "identity surface",
                             delay: 0.40
                         ) {
-                            SettingsRow(label: "coordinator",
+                            SettingsRow(icon: "apple.logo",
+                                        label: "coordinator",
                                         hint: "AppleSignInCoordinator") {
                                 StatusChip(text: "ready", variant: .positive)
                             }
-                            SettingsRow(label: "capability",
+                            SettingsRow(icon: "checkmark.seal",
+                                        label: "capability",
                                         hint: "manual Xcode step · Slice 7.1") {
                                 StatusChip(text: "not enabled", variant: .pending)
                             }
-                            SettingsRow(label: "keychain",
+                            SettingsRow(icon: "key",
+                                        label: "keychain",
                                         hint: "KeychainAppleIDStore") {
                                 italicValue("ready")
                             }
@@ -137,15 +151,18 @@ struct SettingsView: View {
                             caption: "platform research",
                             delay: 0.48
                         ) {
-                            SettingsRow(label: "DeviceActivity",
+                            SettingsRow(icon: "iphone.gen3.radiowaves.left.and.right",
+                                        label: "DeviceActivity",
                                         hint: "Phase 7 spike") {
                                 italicValue("not integrated")
                             }
-                            SettingsRow(label: "FamilyControls",
+                            SettingsRow(icon: "person.2.badge.gearshape",
+                                        label: "FamilyControls",
                                         hint: "Phase 7 spike") {
                                 italicValue("not integrated")
                             }
-                            SettingsRow(label: "fallback signal",
+                            SettingsRow(icon: "hand.raised",
+                                        label: "fallback signal",
                                         hint: "user-declared CuriosityEngagement") {
                                 StatusChip(text: "ready", variant: .positive)
                             }
@@ -156,15 +173,18 @@ struct SettingsView: View {
                             caption: "this app",
                             delay: 0.56
                         ) {
-                            SettingsRow(label: "current slice",
+                            SettingsRow(icon: "bookmark",
+                                        label: "current slice",
                                         hint: "see docs/ROADMAP.md") {
                                 StatusChip(text: currentSliceLabel, variant: .highlight)
                             }
-                            SettingsRow(label: "privacy policy",
+                            SettingsRow(icon: "hand.raised.circle",
+                                        label: "privacy policy",
                                         hint: nil) {
                                 italicValue("your data, your device.")
                             }
-                            SettingsRow(label: "build",
+                            SettingsRow(icon: "info.circle",
+                                        label: "build",
                                         hint: nil) {
                                 italicValue(buildLabel.replacingOccurrences(of: "build ",
                                                                               with: ""))
@@ -265,8 +285,8 @@ struct SettingsView: View {
     @ViewBuilder
     private func italicValue(_ text: String) -> some View {
         Text(text)
-            .font(.custom("InstrumentSerif-Italic", size: 14))
-            .foregroundColor(DSColor.ink.opacity(0.72))
+            .font(.custom("InstrumentSerif-Italic", size: 17))
+            .foregroundColor(DSColor.ink.opacity(0.92))
             .lineLimit(1)
             .truncationMode(.middle)
     }
@@ -281,12 +301,18 @@ struct SettingsView: View {
 /// appear under the label and may reference SwiftData entity names or
 /// platform-API explanations to anchor the engineering-reader.
 private struct SettingsRow<Trailing: View>: View {
+    let icon: String
     let label: String
     var hint: String? = nil
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(DSColor.ink.opacity(0.68))
+                .frame(width: 22, alignment: .center)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                     .font(.system(size: 14, weight: .regular))
@@ -309,14 +335,80 @@ private struct SettingsRow<Trailing: View>: View {
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
+            // Layered paper-glass pill. The shape is drawn five times:
+            //   1. base cream-gradient fill (brighter top, deeper bottom)
+            //   2. top specular bloom (white, plusLighter)
+            //   3. bottom warm-shade band (multiply) for curvature
+            //   4. rim-light hairline along the top edge
+            //   5. ink stroke for the paper outline
+            // Two shadows: a 1px hard paper shadow + a soft ambient lift.
             RoundedRectangle(cornerRadius: 34, style: .continuous)
-                .fill(DSColor.paperCream)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "#FFFEF6"),
+                            DSColor.paperCream,
+                            Color(hex: "#F2EAD8")
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
                 .overlay {
                     RoundedRectangle(cornerRadius: 34, style: .continuous)
-                        .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.78),
+                                    Color.white.opacity(0.18),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                        .blendMode(.plusLighter)
+                        .allowsHitTesting(false)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 34, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    Color(red: 0.34, green: 0.24, blue: 0.18).opacity(0.10)
+                                ],
+                                startPoint: .center,
+                                endPoint: .bottom
+                            )
+                        )
+                        .blendMode(.multiply)
+                        .allowsHitTesting(false)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 34, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.90),
+                                    Color.white.opacity(0.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .center
+                            ),
+                            lineWidth: 1
+                        )
+                        .blendMode(.plusLighter)
+                        .allowsHitTesting(false)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 34, style: .continuous)
+                        .stroke(DSColor.ink.opacity(0.18), lineWidth: 1)
                 }
                 .shadow(color: DSColor.ink.opacity(0.10),
                         radius: 0, x: 1.0, y: 1.0)
+                .shadow(color: Color(red: 0.35, green: 0.25, blue: 0.22).opacity(0.10),
+                        radius: 12, x: 0, y: 6)
         }
         .contentShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
     }
