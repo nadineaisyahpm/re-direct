@@ -55,6 +55,7 @@ Conceptual structure:
    - Sets the usage boundary (duration, theme, tracked apps)
    - Picks the **redirect method category** for the upcoming session (one of `watch`, `read`, `mini-game`, `reflect`, `deep-dive`)
    - The preview/start affordance creates a `TimerSession` row representing the boundary commitment
+   - **Arming semantics:** `start boundary` *arms* a boundary. Tapping it does not mean usage time starts counting immediately. The intended flow is: user arms → boundary waits until the tracked app is actually used → usage accumulates while in use → **system-driven completion** when the tracked-app threshold is reached (DeviceActivity callback, local-fallback countdown, or other system signal). Manual `stop early` is the only user-controlled end. The user cannot manually mark a boundary completed/done. Do not introduce countdown UI, usage-tracking claims, or app-usage chip copy until DeviceActivity / Screen Time feasibility is proven (see ROADMAP § Timer / Boundary note → Arming semantics)
 
 3. **re:tuals — *remembers* (per method)**
    - Each card represents one method lane (one `RedirectMethod`)

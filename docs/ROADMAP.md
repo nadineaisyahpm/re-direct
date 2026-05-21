@@ -118,6 +118,23 @@ Do not overbuild this surface as a regular countdown timer. If DeviceActivity an
 
 Until Phase 7 answers the platform question, Timer work should stay small, local-first, and phrased as **boundary** behavior.
 
+#### Arming semantics
+
+`start boundary` **arms** a boundary. Tapping it does not mean usage time starts counting immediately. The intended future behavior:
+
+- The user arms a boundary for selected apps and a duration.
+- The boundary waits until the tracked app is actually used.
+- Usage time accumulates only while the tracked app is in use.
+- Completion is **system-driven** when tracked-app usage reaches the configured threshold (DeviceActivity callback, local-fallback countdown, or another system signal).
+- Manual user action (`stop early`) can interrupt at any time. It cannot manually mark a boundary as completed/done.
+
+For now:
+- `TimerSession` rows are lightweight local telemetry for an armed boundary.
+- No visible countdown UI.
+- No copy or behavior that implies the app is tracking usage until DeviceActivity / Screen Time feasibility is proven.
+
+User-facing language in `TimerView` should reflect arming, not real-time usage measurement. Past-tense event language in Re:Log (`{N} started`, `{N} completed`, `{N} stopped early`) is event-count language, not usage-duration language — that distinction is load-bearing.
+
 ## Phase history (what's shipped)
 
 ### Phase 1 — Foundation
