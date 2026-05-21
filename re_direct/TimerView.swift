@@ -829,7 +829,7 @@ struct EnhancedPreviewButton: View {
         session.completed = true
         session.actualMinutes = session.elapsedMinutes(now: now)
         try? context.save()
-        print("✓ Boundary finished — actual \(session.actualMinutes) min")
+        print("✓ Boundary done — actual \(session.actualMinutes) min")
         withAnimation(.smooth) {
             activeSessionId = nil
         }
@@ -840,10 +840,10 @@ struct EnhancedPreviewButton: View {
         let now = Date()
         session.endedAt = now
         session.completed = false
-        session.interruptedReason = "cancelled"
+        session.interruptedReason = "stopped early"
         session.actualMinutes = session.elapsedMinutes(now: now)
         try? context.save()
-        print("⏹ Boundary cancelled — actual \(session.actualMinutes) min")
+        print("⏹ Boundary stopped early — actual \(session.actualMinutes) min")
         withAnimation(.smooth) {
             activeSessionId = nil
         }
@@ -928,7 +928,7 @@ struct EnhancedPreviewButton: View {
             if isActive {
                 HStack(spacing: 4) {
                     Button(action: finishSession) {
-                        Text("finish")
+                        Text("done")
                             .font(.custom("InstrumentSerif-Italic", size: 15))
                             .foregroundColor(DSColor.ink.opacity(0.72))
                             .padding(.horizontal, 10)
@@ -941,7 +941,7 @@ struct EnhancedPreviewButton: View {
                         .foregroundColor(DSColor.ink.opacity(0.30))
 
                     Button(action: cancelSession) {
-                        Text("cancel")
+                        Text("stop early")
                             .font(.custom("InstrumentSerif-Italic", size: 15))
                             .foregroundColor(DSColor.ink.opacity(0.72))
                             .padding(.horizontal, 10)
