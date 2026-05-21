@@ -115,6 +115,7 @@ struct TimerView: View {
     @State private var selectedTheme: TimerReminderTheme = TimerReminderTheme.samples[0]
     @State private var previewPulse = false
     @State private var previewReady = false
+    @State private var activeSessionId: UUID? = nil
 
     @State private var titleVisible        = false
     @State private var appSectionVisible  = false
@@ -235,7 +236,8 @@ struct TimerView: View {
                             hours: selectedHours,
                             minutes: selectedMinutes,
                             selectedTheme: selectedTheme,
-                            previewReady: $previewReady
+                            previewReady: $previewReady,
+                            activeSessionId: $activeSessionId
                         )
                         .padding(.top, 24)
                         .padding(.bottom, 16)
@@ -801,72 +803,94 @@ struct EnhancedPreviewButton: View {
     let minutes: Int
     let selectedTheme: TimerReminderTheme
     @Binding var previewReady: Bool
+    @Binding var activeSessionId: UUID?
 
     @Environment(\.modelContext) private var context
-    @State private var lastSavedSessionId: UUID? = nil
+
+    private var isActive: Bool { activeSessionId != nil }
+    private var hasNonZeroDuration: Bool { hours > 0 || minutes > 0 }
+
+    private var buttonLabel: String {
+        isActive ? "boundary active" : "start boundary"
+    }
 
     var body: some View {
         VStack(spacing: 8) {
             Button(action: {
-                guard hours > 0 || minutes > 0 else {
+                guard hasNonZeroDuration else {
                     print("⚠️ Duration is zero.")
                     return
                 }
+                // Dedup guard: TimerView holds the single active session id.
+                // Repeated taps while a session is active do not create another row.
+                // Completion / cancel paths will clear activeSessionId in a future slice.
+                guard !isActive else { return }
+
                 // A TimerSession represents a boundary commitment, NOT a rabbit hole.
                 // Curiosity engagement (read / watched / completed a prompt) is a
-                // separate domain event and will be tracked by a future
-                // CuriosityEngagement model. The button copy still reads "preview"
-                // from the v0.1.0 prototype; revisit that wording in a future slice
-                // now that the affordance commits a real row.
+                // separate domain event tracked via CuriosityEngagement.
                 let session = TimerSession()
                 session.startedAt = .now
                 session.plannedMinutes = (hours * 60) + minutes
                 context.insert(session)
                 try? context.save()
-                lastSavedSessionId = session.id
+                activeSessionId = session.id
 
                 withAnimation(.spring(duration: 0.3, bounce: 0.2)) {
                     previewReady = true
                 }
-                print("▶ Preview — \(hours)h \(minutes)m, theme: \(selectedTheme.name)")
+                print("▶ Boundary started — \(hours)h \(minutes)m, theme: \(selectedTheme.name)")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     withAnimation(.smooth) { previewReady = false }
                 }
             }) {
-                Text("preview")
+                Text(buttonLabel)
                     .font(.custom("InstrumentSerif-Italic", size: 22))
-                    .foregroundColor(DSColor.ink)
+                    .foregroundColor(DSColor.ink.opacity(isActive ? 0.55 : 1.0))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 6)
                     .background {
                         Capsule()
                             .fill(
-                                LinearGradient(
-                                    colors: [.white, DSColor.highlightYellowSoft],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
+                                isActive
+                                    ? LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.85),
+                                            Color.white.opacity(0.85)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                    : LinearGradient(
+                                        colors: [.white, DSColor.highlightYellowSoft],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                             )
                             .overlay {
                                 Capsule()
-                                    .stroke(DSColor.ink.opacity(0.38), lineWidth: 1)
+                                    .stroke(
+                                        DSColor.ink.opacity(isActive ? 0.20 : 0.38),
+                                        lineWidth: 1
+                                    )
                             }
                             .shadow(
-                                color: DSColor.ink.opacity(0.16),
+                                color: DSColor.ink.opacity(isActive ? 0.06 : 0.16),
                                 radius: 0, x: 1.5, y: 1.5
                             )
                     }
             }
             .buttonStyle(PreviewButtonStyle())
+            .disabled(isActive)
 
             if previewReady {
-                Text("preview ready ✓")
+                Text("boundary started ✓")
                     .font(.system(size: 11, weight: .light))
                     .foregroundColor(DSColor.inkSoft.opacity(0.5))
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: lastSavedSessionId)
+        .sensoryFeedback(.impact(weight: .medium), trigger: activeSessionId)
     }
 }
 
