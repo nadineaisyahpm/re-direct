@@ -96,6 +96,13 @@ struct ReLogView: View {
                             .offset(y: revealed ? 0 : 12)
                             .animation(.smooth.delay(0.55), value: revealed)
 
+                        BoundarySessionsSection(revealed: revealed)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 22)
+                            .opacity(revealed ? 1 : 0)
+                            .offset(y: revealed ? 0 : 12)
+                            .animation(.smooth.delay(0.70), value: revealed)
+
                         ScreenTimeSection(revealed: revealed)
                             .padding(.horizontal, 24)
                             .padding(.top, 22)
@@ -730,6 +737,129 @@ struct RecentRabbitHolesSection: View {
         case "deep-dive": return "deep dive"
         default:          return slug
         }
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Boundary Sessions Section
+// ─────────────────────────────────────────────
+
+/// Honest local boundary-session telemetry. Reads TimerSession rows (the
+/// model is boundary commitment, not curiosity engagement). Intentionally
+/// avoids any Screen Time / DeviceActivity / app-usage framing.
+struct BoundarySessionsSection: View {
+
+    let revealed: Bool
+
+    @Query(filter: #Predicate<TimerSession> { $0.deletedAt == nil })
+    private var sessions: [TimerSession]
+
+    private var stats: BoundaryStats {
+        BoundaryStats.compute(from: sessions)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            SectionHeader(
+                title: "Boundary sessions",
+                caption: "starts, dones, stops",
+                captionAlignment: .trailing
+            )
+            .padding(.bottom, 12)
+
+            if stats.total == 0 {
+                emptyState
+            } else {
+                populatedState
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("no boundary sessions yet.")
+                .font(.custom("InstrumentSerif-Italic", size: 17))
+                .foregroundColor(DSColor.ink.opacity(0.70))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("start a timer to begin one.")
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(DSColor.ink.opacity(0.45))
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var populatedState: some View {
+        VStack(alignment: .leading, spacing: 12) {
+
+            HStack(spacing: 6) {
+                statChip(label: "\(stats.total) started")
+                statChip(label: "\(stats.completed) done")
+                statChip(label: "\(stats.interrupted) stopped early")
+            }
+
+            if let last = stats.lastStartedRelative {
+                Text("last started \(last).")
+                    .font(.system(size: 11, weight: .light))
+                    .foregroundColor(DSColor.ink.opacity(0.50))
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func statChip(label: String) -> some View {
+        Text(label)
+            .font(.custom("InstrumentSerif-Italic", size: 12))
+            .foregroundColor(DSColor.ink.opacity(0.78))
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background {
+                Capsule()
+                    .fill(Color(hex: "#FFFDF2").opacity(0.82))
+                    .overlay {
+                        Capsule()
+                            .stroke(DSColor.ink.opacity(0.22), lineWidth: 0.5)
+                    }
+            }
+    }
+}
+
+/// Pure aggregation over a list of (non-deleted) TimerSession rows. Extracted
+/// for unit testing; the view holds no business logic beyond a single
+/// `compute(from:)` call.
+struct BoundaryStats: Equatable {
+    let total: Int
+    let active: Int
+    let completed: Int
+    let interrupted: Int
+    let lastStartedAt: Date?
+    let lastStartedRelative: String?
+
+    static func compute(
+        from sessions: [TimerSession],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> BoundaryStats {
+        let live = sessions.filter { $0.isDeleted == false }
+        let total = live.count
+        let active = live.filter { $0.isActive }.count
+        let completed = live.filter { $0.isCompleted }.count
+        let interrupted = live.filter { $0.isInterrupted }.count
+        let lastStart = live.map { $0.startedAt }.max()
+        let lastRel = lastStart.map {
+            EngagementCaption.relativeDate($0, now: now, calendar: calendar)
+        }
+        return BoundaryStats(
+            total: total,
+            active: active,
+            completed: completed,
+            interrupted: interrupted,
+            lastStartedAt: lastStart,
+            lastStartedRelative: lastRel
+        )
     }
 }
 
