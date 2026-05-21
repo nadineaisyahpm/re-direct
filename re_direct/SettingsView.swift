@@ -286,7 +286,7 @@ private struct SettingsRow<Trailing: View>: View {
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                     .font(.system(size: 14, weight: .regular))
@@ -305,20 +305,20 @@ private struct SettingsRow<Trailing: View>: View {
 
             trailing()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(DSColor.paperCream)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
                         .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
                 }
                 .shadow(color: DSColor.ink.opacity(0.10),
                         radius: 0, x: 1.0, y: 1.0)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 }
 
