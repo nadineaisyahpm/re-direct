@@ -74,10 +74,17 @@ struct SectionHeader: View {
     let title: String
     let caption: String?
     var captionAlignment: Alignment = .trailing
+    var numeral: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if let n = numeral {
+                    Text(n)
+                        .font(.custom("InstrumentSerif-Italic", size: 13))
+                        .foregroundColor(DSColor.ink.opacity(0.45))
+                        .tracking(0.4)
+                }
                 Text(title)
                     .font(DSFont.sectionTitle())
                     .foregroundColor(DSColor.ink)
@@ -155,6 +162,73 @@ struct ChipCapsule: View {
                             .stroke(DSColor.inkSoft.opacity(0.08), lineWidth: 1)
                     }
             }
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Status Chip
+// ─────────────────────────────────────────────
+
+/// Small read-only status pill for `SettingsView` rows. Five variants
+/// share the same paper-card shape, 1px ink hairline, and 1.5/1.5 hard
+/// shadow used by other paper objects in the design system. A 6pt dot
+/// prefix appears for `.positive` to read as a status light.
+struct StatusChip: View {
+    enum Variant {
+        case paper       // cream, default — neutral status
+        case positive    // faint teal with leading dot — "ready" / "none"
+        case muted       // low-opacity ink — "off"
+        case pending     // dusty rose tint — capability not yet enabled
+        case highlight   // #F2EFB8 — reserved for current slice marker
+    }
+
+    let text: String
+    var variant: Variant = .paper
+
+    private var palette: (bg: Color, fg: Color, stroke: Color, dot: Color?) {
+        switch variant {
+        case .paper:
+            return (DSColor.paperCream, DSColor.ink.opacity(0.78),
+                    DSColor.ink.opacity(0.32), nil)
+        case .positive:
+            return (Color(hex: "#E4EEEA"), DSColor.ink.opacity(0.78),
+                    DSColor.ink.opacity(0.28), Color(hex: "#1B4D4A"))
+        case .muted:
+            return (DSColor.paperCream.opacity(0.45), DSColor.ink.opacity(0.45),
+                    DSColor.ink.opacity(0.22), nil)
+        case .pending:
+            return (Color(hex: "#F4E2DC"), DSColor.ink.opacity(0.72),
+                    DSColor.ink.opacity(0.28), nil)
+        case .highlight:
+            return (DSColor.highlightYellowSoft, DSColor.ink,
+                    DSColor.ink.opacity(0.34), nil)
+        }
+    }
+
+    var body: some View {
+        let p = palette
+        HStack(spacing: 5) {
+            if let dot = p.dot {
+                Circle()
+                    .fill(dot)
+                    .frame(width: 6, height: 6)
+            }
+            Text(text)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundColor(p.fg)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background {
+            Capsule()
+                .fill(p.bg)
+                .overlay {
+                    Capsule()
+                        .stroke(p.stroke, lineWidth: 1)
+                }
+                .shadow(color: DSColor.ink.opacity(0.14),
+                        radius: 0, x: 1.5, y: 1.5)
+        }
     }
 }
 

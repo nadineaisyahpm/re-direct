@@ -23,7 +23,7 @@ struct AppTabView: View {
                 .tag(3)
                 .toolbar(.hidden, for: .tabBar)
 
-            PlaceholderTabView(title: "Settings", icon: "gearshape.fill")
+            SettingsView()
                 .tag(4)
                 .toolbar(.hidden, for: .tabBar)
         }
