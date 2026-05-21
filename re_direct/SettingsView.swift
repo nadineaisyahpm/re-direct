@@ -284,7 +284,12 @@ struct SettingsView: View {
             .ignoresSafeArea()
         }
         .preferredColorScheme(.light)
-        .confirmationDialog(
+        // Using `.alert` (not `.confirmationDialog`) so the Cancel button is
+        // visible inline next to the destructive action. The system action-
+        // sheet renders Cancel in a separate bottom block that's easy to
+        // miss; for a data-mutating choice we want both options clearly
+        // adjacent in a single modal.
+        .alert(
             pendingAction?.title ?? "",
             isPresented: Binding(
                 get: { pendingAction != nil },
@@ -292,14 +297,13 @@ struct SettingsView: View {
                     if !presented { pendingAction = nil }
                 }
             ),
-            titleVisibility: .visible,
             presenting: pendingAction
         ) { action in
-            Button(action.confirmLabel, role: .destructive) {
-                perform(action)
+            Button("Cancel", role: .cancel) {
                 pendingAction = nil
             }
-            Button("Cancel", role: .cancel) {
+            Button(action.confirmLabel, role: .destructive) {
+                perform(action)
                 pendingAction = nil
             }
         } message: { action in
