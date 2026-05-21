@@ -48,5 +48,12 @@ final class CuriosityEngagement {
     /// Not required — engagement can happen without a timer running.
     var session: TimerSession? = nil
 
+    /// Optional link to a `ReflectionEntry` written about this engagement.
+    /// For the Reflect-method ritual, this is set on the same save that
+    /// creates the engagement (the writing *is* the engagement). For post-
+    /// ritual reflection (REF3), it will be set on an existing engagement
+    /// after the fact. See docs/REFLECTION_ARCHITECTURE.md §3.
+    var reflection: ReflectionEntry? = nil
+
     init() {}
 }

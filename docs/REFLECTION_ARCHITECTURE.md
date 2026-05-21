@@ -315,6 +315,11 @@ If any answer is wrong, the change pauses and asks.
 - Re:Log rabbit-hole count increments by 1.
 - Settings reflection count increments by 1.
 
+**Current trigger status (REF2 as shipped)**
+- The production trigger is the real reminder / DeviceActivity completion event, which does not yet exist (gated on Phase 7B — see `docs/DEVICE_ACTIVITY_FEASIBILITY.md`).
+- Until that lands, REF2 presents the writing surface from `TimerView`'s `start boundary` action **only in `#if DEBUG` builds**, as a manual-verification hook so the dual-write save path can be exercised end-to-end. Release builds do not present the surface from arming.
+- The DEBUG hook is temporary. Replacing it with the real reminder trigger and removing the hook is REF2.1 (see ROADMAP).
+
 ### REF3 — Post-ritual reflection flow
 
 **Scope**

@@ -806,6 +806,13 @@ struct EnhancedPreviewButton: View {
     @Binding var activeSessionId: UUID?
 
     @Environment(\.modelContext) private var context
+    @Environment(ActiveMethodStore.self) private var activeMethodStore
+
+    /// Set after arming when the active redirect method is `reflect`. Drives
+    /// the `.fullScreenCover` that presents the REF2 writing surface. The
+    /// session is passed in so the dual-write save can link both rows to it.
+    @State private var ritualSession: TimerSession? = nil
+    @State private var presentRitual: Bool = false
 
     private var isActive: Bool { activeSessionId != nil }
     private var hasNonZeroDuration: Bool { hours > 0 || minutes > 0 }
@@ -876,6 +883,25 @@ struct EnhancedPreviewButton: View {
                 context.insert(session)
                 try? context.save()
                 activeSessionId = session.id
+
+                // TEMPORARY DEBUG VERIFICATION HOOK — REF2.
+                //
+                // The Reflect-method ritual writing surface is supposed to
+                // appear from the real reminder / DeviceActivity flow, not
+                // from arming. "start boundary" only arms; usage tracking
+                // and completion are still Phase 7 work (see
+                // docs/DEVICE_ACTIVITY_FEASIBILITY.md). Until that lands,
+                // DEBUG builds may present the screen here so the dual-write
+                // save path can be manually verified.
+                //
+                // Release builds do NOT present this surface from arming.
+                // The production trigger replaces this block in REF2.1.
+                #if DEBUG
+                if activeMethodStore.activeRedirectMethodSlug == "reflect" {
+                    ritualSession = session
+                    presentRitual = true
+                }
+                #endif
 
                 withAnimation(.spring(duration: 0.3, bounce: 0.2)) {
                     previewReady = true
@@ -949,6 +975,11 @@ struct EnhancedPreviewButton: View {
             }
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: activeSessionId)
+        .fullScreenCover(isPresented: $presentRitual, onDismiss: {
+            ritualSession = nil
+        }) {
+            ReflectMethodRitualView(session: ritualSession)
+        }
     }
 }
 
