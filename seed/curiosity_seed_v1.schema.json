@@ -39,6 +39,11 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/RedirectMethod" }
+    },
+    "reflection_prompts": {
+      "type": "array",
+      "description": "Top-level seeded reflection prompts. Not nested under topics — reflection prompts are typically not topic-specific. See docs/REFLECTION_ARCHITECTURE.md §4.",
+      "items": { "$ref": "#/$defs/ReflectionPrompt" }
     }
   },
   "$defs": {
@@ -166,6 +171,41 @@
         },
         "display_name": { "type": "string", "minLength": 1, "maxLength": 60 },
         "summary": { "type": "string", "minLength": 1, "maxLength": 240 }
+      }
+    },
+    "ReflectionPrompt": {
+      "type": "object",
+      "required": ["slug", "body", "source", "estimated_minutes"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+        },
+        "body": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "tone": {
+          "type": ["string", "null"],
+          "description": "Editorial tone tag — \"gentle\", \"curious\", \"honest\", \"tender\". Permissive."
+        },
+        "estimated_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "source": {
+          "type": "string",
+          "enum": ["seed", "ai-bootstrap"],
+          "description": "Provenance. Runtime AI-generated prompts use \"ai-runtime\" and do not appear in seed files."
+        },
+        "mood_affinity": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "context": {
+          "type": ["string", "null"],
+          "enum": ["reflect-method", "post-ritual", null],
+          "description": "Which reflection flow this prompt is intended for. nil = usable in either flow."
+        }
       }
     },
     "ReviewMeta": {

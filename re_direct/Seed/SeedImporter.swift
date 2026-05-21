@@ -62,6 +62,7 @@ struct SeedImporter {
             promptsByTopicAndSlug: promptsByTopicAndSlug,
             into: context
         )
+        try upsertReflectionPrompts(seed.reflectionPrompts ?? [], into: context)
 
         do {
             try context.save()
@@ -203,6 +204,28 @@ struct SeedImporter {
         }
     }
 
+    private func upsertReflectionPrompts(
+        _ items: [ReflectionPromptDTO],
+        into context: ModelContext
+    ) throws {
+        let existing = try fetchBySlug(ReflectionPrompt.self, in: context)
+        for dto in items {
+            let prompt = existing[dto.slug] ?? {
+                let p = ReflectionPrompt()
+                p.slug = dto.slug
+                p.createdAt = Date()
+                context.insert(p)
+                return p
+            }()
+            prompt.body = dto.body
+            prompt.tone = dto.tone
+            prompt.estimatedMinutes = dto.estimatedMinutes
+            prompt.source = dto.source
+            prompt.moodAffinity = dto.moodAffinity ?? []
+            prompt.context = dto.context
+        }
+    }
+
     private func fetchBySlug<T: PersistentModel>(
         _ type: T.Type,
         in context: ModelContext
@@ -228,3 +251,4 @@ extension CuriosityTopic: SlugIdentifiable {}
 extension TopicTrail: SlugIdentifiable {}
 extension ReminderTheme: SlugIdentifiable {}
 extension RedirectMethod: SlugIdentifiable {}
+extension ReflectionPrompt: SlugIdentifiable {}

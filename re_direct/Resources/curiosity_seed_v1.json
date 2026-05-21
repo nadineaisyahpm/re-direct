@@ -1,6 +1,6 @@
 {
-  "seed_version": 2,
-  "generated_at": "2026-05-20T00:00:00Z",
+  "seed_version": 3,
+  "generated_at": "2026-05-22T00:00:00Z",
   "locale": "en-US",
   "topics": [
     {
@@ -71,5 +71,106 @@
     { "slug": "mini-game", "display_name": "Mini Game", "summary": "A small puzzle to reset your attention loop." },
     { "slug": "reflect", "display_name": "Reflect", "summary": "Quiet minutes to notice what you wanted from the scroll." },
     { "slug": "deep-dive", "display_name": "Deep Dive", "summary": "Twenty undistracted minutes into something genuinely curious." }
+  ],
+  "reflection_prompts": [
+    {
+      "slug": "what-were-you-looking-for",
+      "body": "What were you actually looking for when you reached for the app?",
+      "tone": "honest",
+      "estimated_minutes": 2,
+      "source": "seed",
+      "mood_affinity": ["restless"],
+      "context": "post-ritual"
+    },
+    {
+      "slug": "one-detail-pulled-attention",
+      "body": "Name one detail from today that pulled your attention back into the room.",
+      "tone": "gentle",
+      "estimated_minutes": 2,
+      "source": "seed",
+      "mood_affinity": ["tired", "curious"],
+      "context": "post-ritual"
+    },
+    {
+      "slug": "what-question-are-you-carrying",
+      "body": "What question are you carrying right now?",
+      "tone": "tender",
+      "estimated_minutes": 3,
+      "source": "seed",
+      "mood_affinity": [],
+      "context": null
+    },
+    {
+      "slug": "five-small-things",
+      "body": "List five small things you noticed before opening another feed.",
+      "tone": "curious",
+      "estimated_minutes": 3,
+      "source": "seed",
+      "mood_affinity": ["restless", "tired"],
+      "context": "reflect-method"
+    },
+    {
+      "slug": "topic-keeps-returning",
+      "body": "What topic keeps returning to you, even when you try to ignore it?",
+      "tone": "honest",
+      "estimated_minutes": 4,
+      "source": "seed",
+      "mood_affinity": ["curious"],
+      "context": "reflect-method"
+    },
+    {
+      "slug": "what-stayed-with-you",
+      "body": "Write about one thing that stayed with you from the last few minutes.",
+      "tone": "honest",
+      "estimated_minutes": 3,
+      "source": "seed",
+      "mood_affinity": [],
+      "context": "post-ritual"
+    },
+    {
+      "slug": "smaller-than-you-expected",
+      "body": "Describe something you noticed today that was smaller than you expected.",
+      "tone": "gentle",
+      "estimated_minutes": 2,
+      "source": "seed",
+      "mood_affinity": ["curious"],
+      "context": "reflect-method"
+    },
+    {
+      "slug": "what-did-you-already-know",
+      "body": "What did you already know before today that you only just put into words?",
+      "tone": "curious",
+      "estimated_minutes": 4,
+      "source": "seed",
+      "mood_affinity": [],
+      "context": null
+    },
+    {
+      "slug": "if-you-stopped-here",
+      "body": "If you stopped right here, what would you remember about this stretch of time?",
+      "tone": "tender",
+      "estimated_minutes": 2,
+      "source": "seed",
+      "mood_affinity": ["tired"],
+      "context": "post-ritual"
+    },
+    {
+      "slug": "what-do-you-want-to-keep",
+      "body": "Of everything you've taken in today, what would you actually like to keep?",
+      "tone": "honest",
+      "estimated_minutes": 3,
+      "source": "seed",
+      "mood_affinity": [],
+      "context": "reflect-method"
+    },
+    {
+      "slug": "a-quieter-version",
+      "body": "Imagine a quieter version of the next hour. What would be in it?",
+      "tone": "gentle",
+      "estimated_minutes": 3,
+      "source": "seed",
+      "mood_affinity": ["restless"],
+      "context": "reflect-method"
+    }
   ]
 }

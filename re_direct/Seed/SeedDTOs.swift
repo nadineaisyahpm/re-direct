@@ -8,6 +8,9 @@ struct CuriositySeedDTO: Decodable, Sendable {
     let trails: [TrailDTO]?
     let reminderThemes: [ReminderThemeDTO]
     let redirectMethods: [RedirectMethodDTO]
+    /// Optional so existing seed files and test fixtures decode unchanged
+    /// before REF1 lands new content. Importer treats nil as empty array.
+    let reflectionPrompts: [ReflectionPromptDTO]?
 
     enum CodingKeys: String, CodingKey {
         case seedVersion = "seed_version"
@@ -17,6 +20,27 @@ struct CuriositySeedDTO: Decodable, Sendable {
         case trails
         case reminderThemes = "reminder_themes"
         case redirectMethods = "redirect_methods"
+        case reflectionPrompts = "reflection_prompts"
+    }
+}
+
+struct ReflectionPromptDTO: Decodable, Sendable {
+    let slug: String
+    let body: String
+    let tone: String?
+    let estimatedMinutes: Int
+    let source: String
+    let moodAffinity: [String]?
+    let context: String?
+
+    enum CodingKeys: String, CodingKey {
+        case slug
+        case body
+        case tone
+        case estimatedMinutes = "estimated_minutes"
+        case source
+        case moodAffinity = "mood_affinity"
+        case context
     }
 }
 
