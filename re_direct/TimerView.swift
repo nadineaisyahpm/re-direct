@@ -880,7 +880,7 @@ struct EnhancedPreviewButton: View {
                 withAnimation(.spring(duration: 0.3, bounce: 0.2)) {
                     previewReady = true
                 }
-                print("▶ Boundary started — \(hours)h \(minutes)m, theme: \(selectedTheme.name)")
+                print("▶ Boundary armed — \(hours)h \(minutes)m, theme: \(selectedTheme.name)")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     withAnimation(.smooth) { previewReady = false }
                 }
@@ -925,7 +925,7 @@ struct EnhancedPreviewButton: View {
             .disabled(isActive)
 
             if previewReady {
-                Text("boundary started ✓")
+                Text("boundary armed ✓")
                     .font(.system(size: 11, weight: .light))
                     .foregroundColor(DSColor.inkSoft.opacity(0.5))
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
