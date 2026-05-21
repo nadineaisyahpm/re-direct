@@ -17,6 +17,8 @@ struct SettingsView: View {
     private var engagements: [CuriosityEngagement]
     @Query(filter: #Predicate<TimerSession> { $0.deletedAt == nil })
     private var sessions: [TimerSession]
+    @Query(filter: #Predicate<ReflectionEntry> { $0.deletedAt == nil })
+    private var reflections: [ReflectionEntry]
 
     @AppStorage("redirect.seed.installed_version") private var installedSeedVersion: Int = 0
 
@@ -61,6 +63,11 @@ struct SettingsView: View {
                                         hint: "TimerSession") {
                                 italicValue("\(sessions.count)")
                             }
+                            SettingsRow(icon: "text.quote",
+                                        label: "reflections",
+                                        hint: "ReflectionEntry") {
+                                italicValue("\(reflections.count)")
+                            }
                             SettingsRow(icon: "leaf",
                                         label: "seeded topics",
                                         hint: "CuriosityTopic") {
@@ -91,7 +98,7 @@ struct SettingsView: View {
                             SettingsRow(icon: "sparkles",
                                         label: "AI proxy",
                                         hint: "provider-agnostic · Phase 6") {
-                                italicValue("not configured")
+                                italicValue("contract only · disabled")
                             }
                             SettingsRow(icon: "chart.bar.xaxis",
                                         label: "analytics",
@@ -153,13 +160,13 @@ struct SettingsView: View {
                         ) {
                             SettingsRow(icon: "iphone.gen3.radiowaves.left.and.right",
                                         label: "DeviceActivity",
-                                        hint: "Phase 7 spike") {
-                                italicValue("not integrated")
+                                        hint: "feasibility doc · Phase 7B spike") {
+                                italicValue("feasibility planned · not enabled")
                             }
                             SettingsRow(icon: "person.2.badge.gearshape",
                                         label: "FamilyControls",
-                                        hint: "Phase 7 spike") {
-                                italicValue("not integrated")
+                                        hint: "entitlement request gated on 7B") {
+                                italicValue("not enabled")
                             }
                             SettingsRow(icon: "hand.raised",
                                         label: "fallback signal",
@@ -289,6 +296,7 @@ struct SettingsView: View {
             .foregroundColor(DSColor.ink.opacity(0.92))
             .lineLimit(1)
             .truncationMode(.middle)
+            .minimumScaleFactor(0.82)
     }
 }
 
