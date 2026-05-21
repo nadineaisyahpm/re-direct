@@ -814,6 +814,41 @@ struct EnhancedPreviewButton: View {
         isActive ? "boundary active" : "start boundary"
     }
 
+    private func fetchActiveSession() -> TimerSession? {
+        guard let id = activeSessionId else { return nil }
+        let descriptor = FetchDescriptor<TimerSession>(
+            predicate: #Predicate { $0.id == id }
+        )
+        return try? context.fetch(descriptor).first
+    }
+
+    private func finishSession() {
+        guard let session = fetchActiveSession() else { return }
+        let now = Date()
+        session.endedAt = now
+        session.completed = true
+        session.actualMinutes = session.elapsedMinutes(now: now)
+        try? context.save()
+        print("✓ Boundary finished — actual \(session.actualMinutes) min")
+        withAnimation(.smooth) {
+            activeSessionId = nil
+        }
+    }
+
+    private func cancelSession() {
+        guard let session = fetchActiveSession() else { return }
+        let now = Date()
+        session.endedAt = now
+        session.completed = false
+        session.interruptedReason = "cancelled"
+        session.actualMinutes = session.elapsedMinutes(now: now)
+        try? context.save()
+        print("⏹ Boundary cancelled — actual \(session.actualMinutes) min")
+        withAnimation(.smooth) {
+            activeSessionId = nil
+        }
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             Button(action: {
@@ -888,6 +923,33 @@ struct EnhancedPreviewButton: View {
                     .font(.system(size: 11, weight: .light))
                     .foregroundColor(DSColor.inkSoft.opacity(0.5))
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
+
+            if isActive {
+                HStack(spacing: 4) {
+                    Button(action: finishSession) {
+                        Text("finish")
+                            .font(.custom("InstrumentSerif-Italic", size: 15))
+                            .foregroundColor(DSColor.ink.opacity(0.72))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text("·")
+                        .font(.custom("InstrumentSerif-Italic", size: 15))
+                        .foregroundColor(DSColor.ink.opacity(0.30))
+
+                    Button(action: cancelSession) {
+                        Text("cancel")
+                            .font(.custom("InstrumentSerif-Italic", size: 15))
+                            .foregroundColor(DSColor.ink.opacity(0.72))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: activeSessionId)
