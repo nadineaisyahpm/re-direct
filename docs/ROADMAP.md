@@ -110,6 +110,14 @@ The Re:Log widget will count `CuriosityEngagement` rows once that model lands. U
 
 The current preview/start affordance in `TimerView` saves a `TimerSession` on tap. That row represents a boundary commitment, not curiosity engagement. The button is currently labeled **"preview"** — that copy may want future review now that the affordance commits real data; flagged but not changed in this brief.
 
+### Timer / Boundary note
+
+`TimerView` is a provisional **boundary setup** surface, not a generic stopwatch module. The early local flow uses `TimerSession` rows as lightweight session telemetry while Apple Screen Time / DeviceActivity feasibility is still unknown.
+
+Do not overbuild this surface as a regular countdown timer. If DeviceActivity and FamilyControls prove viable, this screen may evolve away from a visible timer and toward app-usage boundary configuration: selected apps, usage thresholds, active redirect method, and redirect/shield behavior. If those APIs are unavailable or too constrained, the same surface remains a manual boundary ritual with honest local session tracking.
+
+Until Phase 7 answers the platform question, Timer work should stay small, local-first, and phrased as **boundary** behavior.
+
 ## Phase history (what's shipped)
 
 ### Phase 1 — Foundation
