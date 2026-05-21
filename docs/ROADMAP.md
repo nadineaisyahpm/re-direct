@@ -173,6 +173,12 @@ User-facing language in `TimerView` should reflect arming, not real-time usage m
 | **re:tuals "choose this" retirement** | Remove the prototype `DeckControls.onChoose` path and the `selectedRitual` binding once `WhenTimerEndsCard` is driven by `activeRedirectMethodSlug` instead. No replacement selection CTA. | proposed, depends on T-shared |
 | **Slice 9.1** | Re:Log shows `TimerSession` stats as a section (separate from rabbit hole count) | proposed |
 | **Slice 7.1** | Apple Sign-In capability enable + end-to-end verification | proposed, manual Xcode step required |
+| **Slice REF0** | Reflection architecture brief (documentation-only) — `docs/REFLECTION_ARCHITECTURE.md`. Distinguishes Reflect-method (ritual *is* writing → dual-write) from post-ritual reflection (follow-up record → attach only). | done |
+| **Slice REF1** | `ReflectionPrompt` model + seed schema v2 + bundled reflection prompts (tagged by `context: "reflect-method"` / `"post-ritual"` / nil) | proposed |
+| **Slice REF2** | Reflect-method writing surface. Triggered only when active method is `reflect`. Saves `ReflectionEntry` + new `CuriosityEngagement(methodSlug: "reflect", reflection: entry)`. No standalone Re:Log entry-point. | proposed, depends on REF1 |
+| **Slice REF3** | Post-ritual reflection flow for non-reflect methods. Saves `ReflectionEntry` linked to the just-finished `TimerSession`; attaches to first reflection-less `CuriosityEngagement` from that session if any. **Does not create a new engagement.** | proposed, depends on REF2 |
+| **Slice REF4** | Re:Log reflections section, **read-only**. Lists recent `ReflectionEntry` rows with tap-to-detail. No standalone "+ write a reflection" button. | proposed, depends on REF3 |
+| **Slice REF5** | AI-generated reflection prompts via proxy (opt-in, gated, in-sheet only); reflection text never transmitted | proposed, depends on REF1 + Phase 6 |
 | **Phase 6** | AI proxy implementation (Cloudflare Worker) + iOS client | future |
 | **Phase 7** | Screen Time API research spike | future |
 | **Phase 8** | CloudKit private database sync | future |
