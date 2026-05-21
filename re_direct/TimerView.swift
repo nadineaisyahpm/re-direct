@@ -822,6 +822,12 @@ struct EnhancedPreviewButton: View {
         return try? context.fetch(descriptor).first
     }
 
+    /// Completion is future system-driven; not exposed as a manual action.
+    ///
+    /// Reserved for a later slice that wires real boundary endings — most
+    /// likely DeviceActivity threshold callbacks, a local-fallback countdown
+    /// that elapses, or some other system signal. Until then, the only
+    /// manual way to end an active boundary is `cancelSession()` (stop early).
     private func finishSession() {
         guard let session = fetchActiveSession() else { return }
         let now = Date()
@@ -926,29 +932,19 @@ struct EnhancedPreviewButton: View {
             }
 
             if isActive {
-                HStack(spacing: 4) {
-                    Button(action: finishSession) {
-                        Text("done")
-                            .font(.custom("InstrumentSerif-Italic", size: 15))
-                            .foregroundColor(DSColor.ink.opacity(0.72))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-
-                    Text("·")
+                // "stop early" is the only manual active-boundary control.
+                // Real boundary completion will be system-driven once
+                // DeviceActivity / threshold callbacks / local fallback
+                // countdown lands. See finishSession() for the reserved
+                // completion path.
+                Button(action: cancelSession) {
+                    Text("stop early")
                         .font(.custom("InstrumentSerif-Italic", size: 15))
-                        .foregroundColor(DSColor.ink.opacity(0.30))
-
-                    Button(action: cancelSession) {
-                        Text("stop early")
-                            .font(.custom("InstrumentSerif-Italic", size: 15))
-                            .foregroundColor(DSColor.ink.opacity(0.72))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
+                        .foregroundColor(DSColor.ink.opacity(0.72))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
                 }
+                .buttonStyle(.plain)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }

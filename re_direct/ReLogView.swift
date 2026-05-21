@@ -747,6 +747,12 @@ struct RecentRabbitHolesSection: View {
 /// Honest local boundary-session telemetry. Reads TimerSession rows (the
 /// model is boundary commitment, not curiosity engagement). Intentionally
 /// avoids any Screen Time / DeviceActivity / app-usage framing.
+///
+/// "completed" is future system-driven: when DeviceActivity / a local-fallback
+/// countdown lands, boundaries can complete automatically and that count
+/// becomes meaningful. Today the only manual end path is "stop early"
+/// (interrupted). The completed chip will read as 0 for installs that never
+/// used the now-retired manual "done" button.
 struct BoundarySessionsSection: View {
 
     let revealed: Bool
@@ -763,7 +769,7 @@ struct BoundarySessionsSection: View {
 
             SectionHeader(
                 title: "Boundary sessions",
-                caption: "starts, dones, stops",
+                caption: "starts, completions, stops",
                 captionAlignment: .trailing
             )
             .padding(.bottom, 12)
@@ -783,7 +789,7 @@ struct BoundarySessionsSection: View {
                 .foregroundColor(DSColor.ink.opacity(0.70))
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("start a timer to begin one.")
+            Text("start a boundary to begin one.")
                 .font(.system(size: 12, weight: .light))
                 .foregroundColor(DSColor.ink.opacity(0.45))
         }
@@ -795,7 +801,7 @@ struct BoundarySessionsSection: View {
 
             HStack(spacing: 6) {
                 statChip(label: "\(stats.total) started")
-                statChip(label: "\(stats.completed) done")
+                statChip(label: "\(stats.completed) completed")
                 statChip(label: "\(stats.interrupted) stopped early")
             }
 
