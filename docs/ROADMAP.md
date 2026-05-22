@@ -182,12 +182,18 @@ User-facing language in `TimerView` should reflect arming, not real-time usage m
 | **Slice REF3.1** | Wire the REF3 trigger. Path of least resistance: a `#if DEBUG` hook at `stop early` for verification, plus a production trigger from the real reminder / DeviceActivity completion event once Phase 7B lands. | proposed, depends on REF3 + Phase 7B |
 | **Slice REF4** | Re:Log reflections section, **read-only**. Lists recent `ReflectionEntry` rows with tap-to-detail. No standalone "+ write a reflection" button. | proposed, depends on REF3 |
 | **Slice REF5** | AI-generated reflection prompts via proxy (opt-in, gated, in-sheet only); reflection text never transmitted | proposed, depends on REF1 + Phase 6 |
-| **Phase 6** | AI proxy implementation (Cloudflare Worker) + iOS client | future |
-| **Phase 7** | Screen Time API research spike. See `docs/DEVICE_ACTIVITY_FEASIBILITY.md`. | future |
+| **Phase 6** | AI lane — promoted to next major effort. See `docs/AI_INTEGRATION_PLAN.md`. Has **no FamilyControls dependency**; can ship while Phase 7B is parked. | active |
+| **Phase 6A** | Strategy / privacy / workflow plan — `docs/AI_INTEGRATION_PLAN.md`. Locks privacy boundary, fallback ladder, slice sequence 6B–6E + optional 6F. | done |
+| **Phase 6B** | AI proxy skeleton (likely Cloudflare Workers). Endpoint shape, request validation, provider abstraction, env-var API key, no payload persistence. No iOS work. See `AI_INTEGRATION_PLAN.md §6 Phase 6B`. | proposed |
+| **Phase 6C** | iOS `AIProxyHTTPClient` + integration with existing `SwiftDataAIRecommendationCache` and `AIRecommendationResolver`. Disabled unless proxy URL configured; fast timeout; fallback ladder; no `ReflectionEntry.body` ever transmitted. | proposed, depends on Phase 6B |
+| **Phase 6D** | Dashboard Daily Direct — first user-visible AI feature. AI fills `topicTitle` / `promptBody` / `topicSlug` / `suggestedMinutes` on the daily card; visual design unchanged; no "AI generated" badge; provenance lives in Settings. | proposed, depends on Phase 6C |
+| **Phase 6E** | Rabbit-hole deepening — extends one `CuriosityEngagement` into a 3–5-step intentional trail (article / video / question / reflection / topic). Ships transient-first (no auto-persist); seeded `TopicTrail` fallback when AI unavailable. | proposed, depends on Phase 6C |
+| **Phase 6F** | AI-generated reflection prompts (= REF5 under the AI-lane name). Opt-in, in-sheet only, no reflection text transmitted. | proposed, depends on Phase 6C + REF1 |
+| **Phase 7** | Screen Time API research lane. See `docs/DEVICE_ACTIVITY_FEASIBILITY.md`. **Parked**, not abandoned — Family Controls entitlement unavailable on current Personal Team. | parked |
 | **Phase 7A-doc** | Feasibility brief — `docs/DEVICE_ACTIVITY_FEASIBILITY.md` §1–§9 + §11–§15. | done |
 | **Phase 7B-doc** | Workflow guardrails for the 7B spike — `docs/DEVICE_ACTIVITY_FEASIBILITY.md §10`. Charter, branch policy, 7B-0…7B-5 step sequence, scope-creep rule, stop conditions, deliverable. | done |
-| **Phase 7B** | DeviceActivity feasibility spike on `phase-7b-device-activity-spike` branch. Bounded by §10 guardrails; deliverable is `docs/DEVICE_ACTIVITY_SPIKE_RESULTS.md`, not an app feature. | proposed, depends on Phase 7B-doc |
-| **Phase 7C** | Production integration of Screen Time stack on `main`, only if Phase 7B returns go. Replaces REF2's and REF3's DEBUG triggers with real reminder/DeviceActivity events. | proposed, depends on Phase 7B (go) |
+| **Phase 7B** | DeviceActivity feasibility spike on `phase-7b-device-activity-spike` branch. Bounded by §10 guardrails; deliverable is `docs/DEVICE_ACTIVITY_SPIKE_RESULTS.md`, not an app feature. | parked, pending Apple Developer Program + Family Controls entitlement |
+| **Phase 7C** | Production integration of Screen Time stack on `main`, only if Phase 7B returns go. Replaces REF2's and REF3's DEBUG triggers with real reminder/DeviceActivity events. | parked, depends on Phase 7B (go) |
 | **Phase 8** | CloudKit private database sync | future |
 | **Phase 9** | TestFlight family/internal distribution | future |
 
