@@ -753,8 +753,8 @@ struct RecentRabbitHolesSection: View {
 
 /// Read-only ledger of the user's most recent `ReflectionEntry` rows. The
 /// only writing surface is the REF2 reflect-method ritual; this section
-/// surfaces what got saved. No edit / delete / detail affordances yet —
-/// REF4 will reconsider those if they're needed.
+/// surfaces what got saved. Tapping a row opens a paper-style detail sheet
+/// for read-only viewing — no edit / delete / share.
 struct ReflectionsSection: View {
 
     let revealed: Bool
@@ -765,6 +765,8 @@ struct ReflectionsSection: View {
         order: .reverse
     )
     private var reflections: [ReflectionEntry]
+
+    @State private var selectedReflection: ReflectionEntry? = nil
 
     private var visibleRows: [ReflectionEntry] {
         Array(reflections.prefix(5))
@@ -784,6 +786,26 @@ struct ReflectionsSection: View {
                 emptyState
             } else {
                 populatedList
+            }
+        }
+        // Custom floating paper overlay — not a bottom sheet. Uses
+        // `.fullScreenCover` with a clear presentation background so the
+        // system layer is just transparent canvas; the popup renders its
+        // own dim backdrop + centered card with fade-and-lift animation.
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { selectedReflection != nil },
+                set: { presented in
+                    if !presented { selectedReflection = nil }
+                }
+            )
+        ) {
+            if let entry = selectedReflection {
+                FloatingReflectionPopup(
+                    entry: entry,
+                    onClose: { selectedReflection = nil }
+                )
+                .presentationBackground(.clear)
             }
         }
     }
@@ -810,7 +832,13 @@ struct ReflectionsSection: View {
                         .fill(DSColor.ink.opacity(0.12))
                         .frame(height: 0.5)
                 }
-                reflectionRow(entry)
+                Button {
+                    selectedReflection = entry
+                } label: {
+                    reflectionRow(entry)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Open reflection")
             }
         }
     }
@@ -818,7 +846,7 @@ struct ReflectionsSection: View {
     @ViewBuilder
     private func reflectionRow(_ entry: ReflectionEntry) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(entry.body)
+            Text(ReflectionPreview.preview(entry.body))
                 .font(.custom("InstrumentSerif-Italic", size: 17))
                 .foregroundColor(DSColor.ink)
                 .lineLimit(2)
@@ -831,6 +859,231 @@ struct ReflectionsSection: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Reflection Preview Helper
+// ─────────────────────────────────────────────
+
+/// Pure word-based truncation for reflection previews in Re:Log rows.
+/// Extracted so the rule ("first N words; append `...` only when truncated")
+/// can be unit-tested without exercising the view.
+enum ReflectionPreview {
+
+    /// Returns the body unchanged if it has `<= wordLimit` words; otherwise
+    /// returns the first `wordLimit` words joined by single spaces with a
+    /// trailing `...`. Whitespace and newlines are treated as word separators;
+    /// leading/trailing whitespace is trimmed from the result.
+    static func preview(_ body: String, wordLimit: Int = 12) -> String {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard wordLimit > 0 else { return trimmed }
+        let words = trimmed.split(whereSeparator: { $0.isWhitespace })
+        if words.count <= wordLimit { return trimmed }
+        return words.prefix(wordLimit).joined(separator: " ") + "..."
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Floating Reflection Popup
+// ─────────────────────────────────────────────
+
+/// Read-only floating paper card for viewing a saved `ReflectionEntry`.
+/// Presented as a centered overlay (not a bottom sheet) over a dim backdrop,
+/// with a fade-and-lift entrance and exit. No edit / delete / share.
+///
+/// When a `CuriosityEngagement` links back to this reflection (via
+/// `engagement.reflection?.id == entry.id`), its `contentTitle` is shown
+/// above the body as the original prompt, with the same per-line marker
+/// highlight used on the REF2 ritual surface. If no link exists (e.g. a
+/// future post-ritual reflection that doesn't attach), the prompt is
+/// omitted gracefully — the body just sits at the top of the card.
+struct FloatingReflectionPopup: View {
+
+    let entry: ReflectionEntry
+    let onClose: () -> Void
+
+    @Query private var linkedEngagements: [CuriosityEngagement]
+
+    @State private var visible = false
+
+    init(entry: ReflectionEntry, onClose: @escaping () -> Void) {
+        self.entry = entry
+        self.onClose = onClose
+        let entryId = entry.id
+        _linkedEngagements = Query(
+            filter: #Predicate<CuriosityEngagement> {
+                $0.deletedAt == nil && $0.reflection?.id == entryId
+            }
+        )
+    }
+
+    private var promptText: String? {
+        guard let title = linkedEngagements.first?.contentTitle,
+              !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return title
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Dim backdrop. Tap to dismiss.
+                Color.black
+                    .opacity(visible ? 0.34 : 0.0)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { close() }
+
+                // Floating paper card — sized to content, capped at 72% of
+                // screen height. ViewThatFits picks the non-scrolling
+                // variant when the content fits; otherwise the scrolling
+                // variant is used and clamped by the maxHeight. This avoids
+                // ScrollView's tendency to claim more vertical space than
+                // its content needs (which was painting a ghost shadow).
+                paperCard(maxHeight: geo.size.height * 0.72)
+                    .padding(.horizontal, 24)
+                    .scaleEffect(visible ? 1.0 : 0.96)
+                    .opacity(visible ? 1.0 : 0.0)
+                    .offset(y: visible ? 0 : 8)
+            }
+        }
+        .preferredColorScheme(.light)
+        .onAppear {
+            withAnimation(.smooth(duration: 0.32)) { visible = true }
+        }
+    }
+
+    private func paperCard(maxHeight: CGFloat) -> some View {
+        // The VStack inside `cardContents` is naturally content-sized — its
+        // ideal height equals the sum of its children's heights. Painting
+        // the background directly on it keeps the card visually tight.
+        // `.frame(maxHeight:)` caps the whole thing; very long bodies clip
+        // at the cap (real reflection bodies are short enough today that
+        // this is acceptable for MVP — internal scroll for unusually long
+        // bodies can be added back as a follow-on if needed).
+        cardContents
+            .background { cardBackground }
+            .overlay(alignment: .topTrailing) { closeButton }
+            .frame(maxHeight: maxHeight)
+    }
+
+    private var cardContents: some View {
+        VStack(alignment: .leading, spacing: 14) {
+
+            Text(EngagementCaption.relativeDate(entry.createdAt))
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(DSColor.ink.opacity(0.55))
+
+            if let prompt = promptText {
+                Text(prompt)
+                    .font(.custom("InstrumentSerif-Italic", size: 20))
+                    .foregroundColor(DSColor.inkSoft)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(3)
+                    .lineSpacing(4)
+                    .textRenderer(RelogLineHighlightRenderer(
+                        color: DSColor.highlightYellow.opacity(0.7)
+                    ))
+                    .padding(.trailing, 36) // breathing room from ✕
+                    .padding(.top, 2)
+            }
+
+            Text(entry.body)
+                .font(.system(size: 17))
+                .foregroundColor(DSColor.ink)
+                .lineSpacing(4)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, promptText == nil ? 0 : 4)
+
+            Text("local · not shared")
+                .font(.system(size: 11, weight: .light).italic())
+                .foregroundColor(DSColor.ink.opacity(0.45))
+                .padding(.top, 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22)
+        .padding(.top, 22)
+        .padding(.bottom, 22)
+    }
+
+    private var cardBackground: some View {
+        // Use Rectangle (a Shape that always fills its proposed frame with
+        // no intrinsic aspect ratio) as the cream layer, with the paper
+        // texture as an overlay on top. A previous ZStack-based version
+        // picked up the Image's intrinsic portrait ratio and grew the card
+        // beyond its host frame; Rectangle has no such preference.
+        Rectangle()
+            .fill(DSColor.paperCream)
+            .overlay {
+                Image("Paper Sheet")
+                    .resizable()
+                    .scaledToFill()
+                    .allowsHitTesting(false)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
+            }
+            .shadow(color: DSColor.ink.opacity(0.14),
+                    radius: 0, x: 1.5, y: 1.5)
+            .shadow(color: Color(red: 0.35, green: 0.25, blue: 0.22).opacity(0.10),
+                    radius: 14, x: 0, y: 8)
+    }
+
+    private var closeButton: some View {
+        Button {
+            close()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(DSColor.ink.opacity(0.70))
+                .frame(width: 30, height: 30)
+                .background {
+                    Circle()
+                        .fill(DSColor.paperCream)
+                        .overlay {
+                            Circle()
+                                .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
+                        }
+                        .shadow(color: DSColor.ink.opacity(0.10),
+                                radius: 0, x: 1, y: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Close reflection")
+        .padding(.top, 12)
+        .padding(.trailing, 12)
+    }
+
+    private func close() {
+        withAnimation(.smooth(duration: 0.22)) { visible = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            onClose()
+        }
+    }
+}
+
+// `TextRenderer` that paints a flat marker-yellow swipe behind each rendered
+// line of text. Local duplicate of the renderer used in
+// `ReflectMethodRitualView` so REF2.6 doesn't need to alter that file's
+// visibility. Behavior must stay identical.
+private struct RelogLineHighlightRenderer: TextRenderer {
+    var color: Color
+    var insetX: CGFloat = -6
+    var insetY: CGFloat = -1
+
+    func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+        for line in layout {
+            let rect = line.typographicBounds.rect.insetBy(dx: insetX, dy: insetY)
+            context.fill(Path(rect), with: .color(color))
+        }
+        for line in layout {
+            context.draw(line)
+        }
     }
 }
 
