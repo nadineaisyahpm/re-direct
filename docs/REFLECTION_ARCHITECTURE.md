@@ -322,22 +322,15 @@ If any answer is wrong, the change pauses and asks.
 
 ### REF3 — Post-ritual reflection flow
 
-**Scope**
-- Detect non-reflect `TimerSession` completion (planned end past + foreground reconciliation, or `stop early`, or — future — DeviceActivity threshold).
-- Present the post-ritual writing sheet (§5.3) using a `ReflectionPrompt` with `context = "post-ritual"` (or untagged).
-- On save: per §3.2 — new `ReflectionEntry` linked to the just-finished `TimerSession`, attached to the first reflection-less `CuriosityEngagement` from that session if any. **No new `CuriosityEngagement` insertion.**
-- A small persistent "open ritual" indicator on Re:Log when a non-reflect session has completed and the reflection is unwritten.
-- Tests: post-ritual save does not increment `CuriosityEngagement.count`; `ReflectionEntry.count` increments by 1; existing engagement's `reflection` field gets the new entry; multi-engagement session attaches to first reflection-less engagement only.
+The full REF3 contract is documented in **§11 — Post-ritual reflection contract**. The short version:
 
-**Out of scope**
-- No Reflect-method changes.
-- No AI.
-- No Re:Log read view yet.
+- Triggered after a *non-reflect* `TimerSession` completes (real trigger is reminder / DeviceActivity, future; no manual fake trigger ships until the data relationship is finalized).
+- Presents the post-ritual writing sheet using a `ReflectionPrompt` with `context = "post-ritual"` (fallback: untagged → hardcoded).
+- Saves a new `ReflectionEntry` linked to the just-finished `TimerSession`. If a `CuriosityEngagement` already exists from that session and has no reflection yet, the new entry is attached to it via `CuriosityEngagement.reflection`.
+- **Never creates a new `CuriosityEngagement(methodSlug: "reflect")`** — that's REF2's job, not REF3's.
+- Empty/dismiss writes nothing.
 
-**Acceptance**
-- A non-reflect session completes; the post-ritual sheet appears.
-- Writing and saving creates one `ReflectionEntry`; `CuriosityEngagement.count` does not change.
-- Dismissing without writing leaves the session in a "reflection-pending" state; the sheet re-presents on next foreground.
+See §11 for triggers, eligible methods, prompt pool, save semantics, data-relationship analysis, edge cases, testing plan, and acceptance criteria.
 
 ### REF4 — Re:Log reflections section (read-only)
 
@@ -445,3 +438,239 @@ Acceptance:
 ```
 
 REF2, REF3, REF4, REF5 prompts follow once each predecessor lands.
+
+---
+
+## 11. Post-ritual reflection contract (REF3)
+
+This chapter is the load-bearing brief for the post-ritual writing surface. It expands on §2.2, §3.2, and §5.3, and it is what REF3's implementer should treat as canonical. Until this brief is fully accepted, **no code lands** — not even a DEBUG verification hook.
+
+### 11.1 What REF3 is, in one sentence
+
+After a non-reflect ritual finishes, the user is invited to write a short follow-up record about what they noticed; the record is saved as a `ReflectionEntry` linked to the session and attached to that session's existing `CuriosityEngagement` if one exists. **No new `CuriosityEngagement` is ever created by REF3.**
+
+### 11.2 Trigger
+
+There are three trigger sources, in order of intended preference:
+
+1. **DeviceActivity threshold reached** (production, future). When Phase 7B lands and a real boundary completion fires on-device, that's the canonical trigger. The reflection sheet presents when the user returns to re:direct after the threshold callback.
+2. **Local-fallback foreground reconciliation** (production, fallback). When the user re-foregrounds re:direct and a non-reflect `TimerSession` exists whose `plannedEndAt` is in the past *and* whose `reflectionPending` flag is unset, the sheet presents. This is the path that ships if DeviceActivity is denied or deferred.
+3. **`stop early`** (production, immediate). When the user manually ends a non-reflect boundary via `stop early`, the sheet presents immediately on dismiss of the Timer surface. This is the only trigger that can fire without leaving re:direct.
+
+**Current status**: none of these are wired. REF3 ships with **no production trigger and no DEBUG hook**. A DEBUG verification hook may be added later only after §11.7 (data relationship) is signed off and §11.6's save shape is proven by tests against an in-memory store. The REF2 lesson — that a DEBUG hook can creep toward production semantics — informs this caution.
+
+### 11.3 Eligible methods
+
+REF3 only runs for sessions whose **active method at completion** was one of:
+
+| Slug | Display |
+|---|---|
+| `watch` | Watch |
+| `read` | Read |
+| `mini-game` | Mini Game |
+| `deep-dive` | Deep Dive |
+
+**`reflect` is excluded.** Reflect-method sessions already wrote a `ReflectionEntry` via REF2 when the ritual completed — adding a second writing surface afterward would create two reflections for one ritual, which contradicts §3.3.
+
+The implementation reads the method from `ActiveMethodStore.activeRedirectMethodSlug` at trigger time, not from the `TimerSession` row (the row currently doesn't store the method). When the method is `reflect` or `nil`, the post-ritual sheet must not present.
+
+### 11.4 UI design
+
+Source of truth: the **REF2 Reflect Screen** standalone HTML (note: the filename is historical — it is the post-ritual reference, **not** the REF2 reference) and `re_direct/design_refs/Post_Log 1.png` / `Post_Log 2.png` / `Post_Log 3.png`.
+
+**Adopted from the references**:
+- Warm `PaperBackground(.warm)` + grain (same chassis as REF2).
+- Top-leading 36pt paper-glass `✕` dismiss circle. No top-trailing element.
+- **Greeting cascade**:
+  - `welcome back,` — Instrument Serif Italic 22pt, ink 0.55–0.62.
+  - `{firstName}.` — Instrument Serif **Regular** 38pt, full ink. Pulled from `UserProfile.displayName`; falls back to `friend.` (lowercase, italic) when no profile name is set.
+  - `a quiet minute.` — system sans light 13pt, ink 0.62.
+- Highlighted prompt under the greeting — same per-line `LineHighlightRenderer` REF2 introduced, same 24pt Instrument Serif Italic, same `.lineLimit(2)`, same flat-yellow swipe.
+- Paper note: cream `#FFFDF2`, ink hairline, 1.5/1.5 hard shadow + 14/22 soft shadow. **Min height 220pt** (lower than REF2's 320 — post-ritual is a *noticing*, not a sit-down).
+- Input: **SF Pro 15pt** (not Instrument Serif). Italic placeholder `start with what you remember.` at ink 0.32, ink caret.
+- Footer line: `{n} / 280` counter at left, light 11pt. Counter goes amber past 240, red past 280. `local · not shared` mark at right.
+- Save pill: yellow gradient capsule, Instrument Serif **Regular** 20pt (matching REF2's post-polish), underlined, 1.5/1.5 hard shadow. Disabled when trimmed body is empty.
+
+**Explicitly dropped from `Post_Log*.png`** (those mockups include surfaces beyond reflection):
+- ❌ Content thumbnail / polaroid card attached to the prompt — REF3 has no content slot.
+- ❌ Recommender feedback chips ("Would you like more recommendations like this? Yes / Maybe / No / Done"). Recommender feedback is a *recommender* concern, not a reflection concern.
+- ❌ "congratulations!" celebratory copy under the greeting — too loud for the editorial tone.
+- ❌ "one last small step before you go..." kicker — patronizing; the greeting + prompt already imply intent.
+
+If a recommender-feedback surface ever ships, it's its own slice, presented after REF3's reflection is saved (or alongside it as an opt-in). REF3 does not own that.
+
+### 11.5 Prompt pool
+
+Selection priority for the post-ritual sheet, mirroring REF2's pattern:
+
+1. Random `ReflectionPrompt` where `context == "post-ritual"` and `deletedAt == nil`.
+2. Random `ReflectionPrompt` where `context == nil` and `deletedAt == nil` (untagged generals).
+3. Hardcoded fallback: `"what's one thing you noticed in the last few minutes?"`
+
+Pure helper signature parallels `ReflectMethodRitualHelpers.choosePrompt(from:pickIndex:)`. Reuse the same `Selection` enum shape from REF2 so call sites stay symmetric.
+
+The REF1 seed bundle ships 5 prompts tagged `context: "post-ritual"` plus 2 untagged generals — enough to start the pool. The fallback hardcoded string is a safety net only.
+
+### 11.6 Save semantics
+
+Strict contract, mirroring §3.2 with code-shape:
+
+```swift
+@MainActor
+static func performPostRitualSave(
+    body: String,
+    prompt: Selection,
+    session: TimerSession,                       // REQUIRED (no nil; REF3 only fires from a session)
+    in context: ModelContext
+) -> ReflectionEntry? {
+    let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }   // empty → write nothing
+
+    let now = Date()
+    let entry = ReflectionEntry()
+    entry.body      = trimmed
+    entry.createdAt = now
+    entry.updatedAt = now
+    entry.session   = session                    // ALWAYS link to session
+    context.insert(entry)
+
+    // Attach to the first reflection-less engagement from that session, if any.
+    // Do NOT iterate-and-attach-all: see §11.7.
+    let engagements = (try? context.fetch(FetchDescriptor<CuriosityEngagement>(
+        predicate: #Predicate { $0.deletedAt == nil }
+    )))?.filter { $0.session?.id == session.id && $0.reflection == nil } ?? []
+    if let first = engagements.first {
+        first.reflection = entry
+    }
+
+    // No new CuriosityEngagement is inserted. Period.
+    try? context.save()
+    return entry
+}
+```
+
+Count invariants after a successful post-ritual save:
+- `ReflectionEntry.count` → +1
+- `CuriosityEngagement.count` → **unchanged**
+- `TimerSession.count` → unchanged
+
+Count invariants when the user dismisses with an empty body:
+- All three → unchanged. No row inserted, no row updated.
+
+The function returns the inserted `ReflectionEntry` so the calling sheet can dismiss the cover and trigger a single `.sensoryFeedback(.success)`.
+
+### 11.7 Data relationship analysis
+
+`CuriosityEngagement.reflection: ReflectionEntry?` is currently a **single optional** added in REF2. This is the only place REF3 needs to write on the engagement side.
+
+**What this supports**:
+- Reflect-method (REF2): one new engagement ↔ one new reflection. ✅ Trivially one-to-one.
+- Post-ritual with **zero** engagements during the session: reflection saves with `session` link only; no engagement to attach to. ✅ Supported.
+- Post-ritual with **one** engagement during the session: reflection attaches via `engagement.reflection = entry`. ✅ Supported.
+- Post-ritual with **multiple** engagements during the session: only the **first reflection-less** engagement gets the link. The other engagements stay unreflected. The reflection still appears in Re:Log via its `session` link.
+
+**What this does NOT support yet** (open questions for REF3 sign-off):
+
+1. **One reflection covering several engagements.** If a session had three rabbit holes and the user writes one post-ritual reflection, only one of the three gets the link. The other two will show no reflection on their detail surfaces. This is **acceptable for REF3** because we don't have an engagement-detail UI yet (REF4 is read-only list), and the data is recoverable: a future query can find a reflection's siblings via `entry.session == engagement.session`. We do not need to change the model now.
+
+2. **Several reflections covering one engagement.** Not possible today — the engagement holds one reflection ref. REF3 doesn't need it (a user gets one post-ritual prompt per session), but a future "write a follow-up later" feature would require either making `CuriosityEngagement.reflections` a to-many relationship or moving the link to `ReflectionEntry.engagement`. This is a **Phase 8+** concern, not REF3.
+
+**Decision for REF3**: ship with the existing one-to-one optional. Document in the implementation comment that "first reflection-less attach" is the policy. No schema migration in REF3.
+
+### 11.8 Edge cases
+
+| Scenario | REF3 behavior |
+|---|---|
+| Session ended via DeviceActivity (future), user reopens app | Sheet presents on foreground. Existing engagements from that session are queried; reflection attaches to first reflection-less one if any. |
+| Session ended via `stop early` while app foregrounded | Sheet presents immediately after Timer dismisses. Same attach logic. |
+| Session ended via planned-end-past local fallback | Sheet presents on next foreground. Same attach logic. |
+| User dismisses without writing (✕ tap or swipe-down) | No rows written. `reflectionPending` flag stays set; sheet re-presents on next foreground (and we count those re-presentations to back off after N tries — REF3 design pass detail). |
+| User saves a one-character body | `trimmingCharacters(in:.whitespacesAndNewlines)` keeps single characters; save proceeds. We do not enforce a minimum length beyond "non-empty after trim." |
+| Active method is `reflect` when the trigger would fire | **Sheet must not present.** Reflect-method already wrote its reflection during REF2. |
+| Active method is `nil` (no method picked) at trigger time | Sheet must not present. Without a method we don't know which prompt context to draw from, and the session lacks the editorial framing the post-ritual sheet implies. |
+| Multiple sessions end in rapid succession before the user returns | One sheet per session, queued. Or: only the most recent unreflected session gets a sheet, with older ones marked "skipped." REF3 design pass picks one of these and documents it. **Default recommendation**: one sheet per re-foreground, surface the most recent unreflected session, leave older ones for the user to manually log via re:tuals (future REF4) if at all. |
+| The seed pool has zero `post-ritual` prompts and zero untagged prompts | Hardcoded fallback string is used. The user sees a working sheet either way. |
+
+### 11.9 Temporary testing plan
+
+**No production fake trigger ships in REF3-first.** Until §11.7's relationship policy is signed off and §11.6's save shape is verified by tests against an in-memory store, the post-ritual surface does not get a trigger from `TimerView`, from Settings, or from anywhere else.
+
+**The testable contract**:
+- `performPostRitualSave(...)` is a pure-as-possible helper that takes a `ModelContext` and writes deterministic rows. Tests live in a new `re_directTests/PostRitualReflectionTests.swift` and assert:
+  - Empty trimmed body → no rows written; returns `nil`.
+  - Non-empty body + session with zero engagements → 1 `ReflectionEntry` row; `CuriosityEngagement.count` unchanged.
+  - Non-empty body + session with one engagement → 1 `ReflectionEntry`; the engagement's `reflection` field points to it.
+  - Non-empty body + session with multiple engagements → 1 `ReflectionEntry`; only the first reflection-less engagement is linked.
+  - Non-empty body + session with all engagements already reflected → 1 `ReflectionEntry`, session-linked but no engagement attachment.
+  - Soft-deleted engagements are not eligible for attachment.
+- `chooseReflectionPrompt(...)` (the post-ritual sibling of REF2's helper) tests mirror the REF2 selection-priority tests.
+
+**Only after those tests pass**, a DEBUG verification hook may be added at a single trigger site (most likely the `stop early` button in `TimerView`, since it's the only path that doesn't require Phase 7B or foreground reconciliation logic). Like REF2's hook, it must be:
+- Wrapped in `#if DEBUG` / `#endif`.
+- Documented at the trigger site with a comment naming it as a verification hook.
+- Listed in a follow-on `REF3.1` slice for removal once the real trigger lands.
+
+The hook is **not** part of REF3's first ship. It's a separate slice gated on this brief's acceptance.
+
+### 11.10 What REF3 must NOT do
+
+- ❌ Create a new `CuriosityEngagement(methodSlug: "reflect")`. Ever.
+- ❌ Present the sheet when the active method is `reflect`.
+- ❌ Add a standalone create button anywhere (Re:Log, Dashboard, Settings, re:tuals).
+- ❌ Add a Yes/No/Maybe recommender feedback row.
+- ❌ Attach content thumbnails.
+- ❌ Call any AI proxy. Reflection text never leaves the device — §6 applies verbatim.
+- ❌ Change the `CuriosityEngagement.reflection` relationship shape.
+- ❌ Add a new SwiftData model.
+- ❌ Ship a production trigger.
+- ❌ Ship a DEBUG trigger as part of the first REF3 PR (see §11.9).
+
+### 11.11 Acceptance criteria (when REF3 ships)
+
+- Build green; tests pass.
+- New `PostRitualReflectionTests` suite covers §11.9's six scenarios.
+- The post-ritual sheet view exists and matches §11.4's design language.
+- `performPostRitualSave(...)` honors §11.6's contract.
+- The Re:Log reflections section (REF2.5) shows new post-ritual entries without code change (the existing `@Query` already covers them).
+- The Settings reflection count increments only on non-empty save.
+- The Re:Log rabbit-hole count is **untouched** by REF3 saves.
+- No data leaves the device.
+- No production trigger is wired.
+
+### 11.12 Next coding prompt template
+
+```
+Run Slice REF3: post-ritual reflection writing surface (no trigger yet).
+
+Scope:
+- Add re_direct/PostRitualReflectionView.swift per the spec in
+  docs/REFLECTION_ARCHITECTURE.md §11.4–§11.6.
+- Reuse LineHighlightRenderer from ReflectMethodRitualView.swift (lift
+  to a shared file or duplicate locally — implementer's call).
+- Add the pure helpers:
+    - PostRitualReflectionHelpers.choosePrompt(from:pickIndex:)
+    - PostRitualReflectionHelpers.performSave(body:prompt:session:in:)
+  matching the shape in §11.6.
+- Add re_directTests/PostRitualReflectionTests.swift covering the six
+  scenarios in §11.9 plus a prompt-selection priority test that mirrors
+  REF2's.
+
+Do not:
+- Wire any trigger (no Timer, Settings, or anywhere else).
+- Add a DEBUG verification hook in this PR — that's REF3.1.
+- Create a new CuriosityEngagement on save.
+- Change the CuriosityEngagement.reflection relationship.
+- Touch TimerView, ReLogView, RetualsView, SettingsView, DashboardView.
+- Add any AI call.
+
+Acceptance:
+- Build green.
+- All existing tests still pass.
+- New PostRitualReflectionTests pass.
+- The view is fully implemented but unreachable from any user-facing
+  path. A future REF3.1 slice adds the trigger.
+- Commit as: feat(reflection): add post-ritual writing surface
+```
+
+REF3.1 (trigger wiring) and REF3.2 (recommender feedback, if ever) follow as separate slices.
+
