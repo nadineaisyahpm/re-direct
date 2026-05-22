@@ -155,6 +155,16 @@ The iOS-side `AIRecommendationRequest` (`re_direct/AIRecommendationRequest.swift
 | `provider_preference` | yes | one of `AIProviderPreference` raw values |
 | `locale` | yes | `^[a-z]{2}(-[A-Z]{2})?$` (BCP-47 short form) |
 
+**Optional personalization-seed fields** added by `AI_INTEGRATION_PLAN.md §12` (Phase 6A.1). The 6B skeleton accepts these without making them required, so iOS clients shipping before the storage slice lands can still call the proxy:
+
+| Field | Required | Constraint |
+|---|---|---|
+| `interest_seeds` | no | 0 ≤ count ≤ 12; each entry ≤ 40 chars; matches `^[A-Za-z0-9][A-Za-z0-9 \-]{0,39}$` |
+| `preferred_tone` | no | ≤ 80 chars; user-supplied free text |
+| `preferred_formats` | no | 0 ≤ count ≤ 5; each entry is one of the five canonical method slugs (`watch`, `read`, `mini-game`, `reflect`, `deep-dive`) |
+
+The proxy treats these as *augmentation*. Their absence does not change the validation outcome. Their presence informs the system prompt the provider adapter builds, but never replaces the existing `interests` field — the two coexist (6A.1 explicitly lets the iOS client populate `interests` from seeds initially).
+
 **Rejected silently or noisily**:
 
 - Unknown top-level keys → 400 with `{ "error": { "code": "invalid_input", "message": "unknown field: …" } }`. (Strict parsing prevents accidental field additions from leaking through.)

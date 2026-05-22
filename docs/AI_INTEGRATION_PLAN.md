@@ -83,6 +83,11 @@ This is non-negotiable. If a slice would violate this, the slice stops and asks.
 - Coarse recency bucket per engagement (`today` / `this_week` / `older`) — never precise timestamps.
 - Optional user-selected mood (one of a short canonical set: `restless`, `tired`, `curious`, `tender`, etc.). Mood is **user-selected**, never inferred from text or behavior.
 - Excluded prompt hashes (`excludePromptHashes`) — opaque local SHA-256s of slugs the user has already seen. They are dedup tokens, not content.
+- **User-declared personalization seeds** (added by §12 Phase 6A.1):
+  - `interest_seeds` — short list of user-declared interest keywords (e.g. `"Machine Learning"`, `"Neuroscience"`). Each is a plain noun phrase the user explicitly typed or selected. Bounded length per entry (≤ 40 chars), bounded list size (≤ 12).
+  - Optional `preferred_tone` — a short user-supplied tone descriptor string.
+  - Optional `preferred_formats` — a small list of method slugs the user prefers (subset of the five canonical method slugs above).
+  All three are **user-declared**, never inferred from reflection text, app usage, or any private signal.
 
 ### 4.2 What must never leave the device
 
@@ -320,6 +325,9 @@ These are **concepts, not contracts**. The real DTOs evolve in 6B / 6C / 6E and 
   "locale": "en-US",
   "timeBudgetMinutes": 15,
   "preferredMethodSlug": "read",     // optional; the user's active method
+  "interestSeeds": ["Apple", "Machine Learning", "AI", "Neuroscience", "Software Engineering"],
+  "preferredTone": "curious, warm, technically literate",   // optional
+  "preferredFormats": ["read", "deep-dive", "reflect"],     // optional; subset of method slugs
   "recentEngagements": [
     { "title": "deep-sea glow",     "methodSlug": "read",  "recencyBucket": "today" },
     { "title": "self sabotage",     "methodSlug": "reflect","recencyBucket": "this_week" }
@@ -333,6 +341,9 @@ These are **concepts, not contracts**. The real DTOs evolve in 6B / 6C / 6E and 
 ```
 
 Notes:
+- `interestSeeds` capped at N=12; each entry ≤ 40 chars; user-declared keywords only (see §12). On a fresh install with no engagement history, this is the **primary** personalization signal.
+- `preferredTone` optional, ≤ 80 chars, user-supplied.
+- `preferredFormats` optional, each entry is a canonical method slug, list ≤ 5.
 - `recentEngagements` capped at N=8.
 - `recencyBucket` ∈ {`today`, `this_week`, `older`}.
 - `privacyMode: "minimal"` is the default and the only supported value in v1 — declares the payload-content constraints we agreed to in §4.
@@ -480,3 +491,125 @@ This brief is accepted when:
 - DeviceActivity (Phase 7B) is acknowledged as parked, not abandoned, and AI is acknowledged as not pretending to replace it.
 
 Once accepted, **Phase 6B begins** — and 6B is the first slice that touches a server.
+
+---
+
+## 12. Personalization seeds (Phase 6A.1 amendment)
+
+This section amends §4, §6, and §7. DeviceActivity is parked, so the first cohort of AI requests has **no app-usage signal** to lean on. Until enough manually-logged `CuriosityEngagement` rows accumulate, the primary personalization signal must come from somewhere honest, local, and explicit. That signal is **user-declared interest seeds**.
+
+### 12.1 What personalization seeds are
+
+A small, local, user-declared list of interest keywords that tells the AI proxy "this is what this person finds curious." Seeds are:
+
+- **Local-first** — they live in SwiftData (§12.5) and stay on the device unless an AI request explicitly takes them. They are not synced anywhere in v1.
+- **User-declared** — the user types or selects them, ideally at onboarding (§12.6). Nothing infers them from text or behavior.
+- **Editable** — the user can add, remove, or rewrite seeds at any time via Settings or onboarding flow (the surface lands in a future slice; the *capability* is reserved here).
+- **Not DeviceActivity data** — no app-usage logs, no Apple Screen Time material, no FamilyControls tokens.
+- **Not inferred from private reflection text** — `ReflectionEntry.body` never feeds seed generation. Period.
+
+Seeds exist to **bootstrap** Daily Direct on day-one and to **anchor** rabbit-hole deepening when engagement history is thin.
+
+### 12.2 Default personal v1 seed interests
+
+For the **personal/local v1 build** (Nadine's current device), the default seed list is:
+
+- `Apple`
+- `Machine Learning`
+- `AI`
+- `Neuroscience`
+- `Software Engineering`
+
+These are **personal defaults**, not universal product defaults. They sit in the local store as the initial value when the SwiftData seed importer runs against a fresh profile. When the user editing surface lands, the user can rewrite or clear them.
+
+**They must not be hardcoded as product defaults for all future users.** A future generalization slice will either:
+- Ship empty defaults and force onboarding to collect them, or
+- Ship a calmer "starter set" of broad-curiosity prompts that doesn't presume the user's interests.
+
+The choice is deferred — but a comment in whatever Swift code eventually seeds these values must mark them clearly as "personal v1, replace before any third-party install."
+
+### 12.3 Daily Direct input priority
+
+When Phase 6D wires Daily Direct, the AI request payload assembles signals in this priority order:
+
+1. **User-declared interest seeds** (§12.1, §12.2) — primary signal.
+2. **Recent manually-logged `CuriosityEngagement` titles + method slugs + recency buckets** (capped at 8 entries) — augmentation as engagement history builds.
+3. **Seeded `CuriosityTopic` titles/summaries** — content the bundle already curated; helps the proxy stay close to what the app can actually visualize.
+4. **Active or preferred redirect method** (`activeRedirectMethodSlug` from `ActiveMethodStore`, falls back to `UserProfile.activeRedirectMethod.slug` if any).
+5. **Coarse time budget and locale** — `timeAvailableMinutes` clamped 5–120; `locale` BCP-47.
+
+**DeviceActivity / app-usage data is explicitly NOT in this priority list.** The list does not need it to be useful, and the privacy boundary does not include it.
+
+### 12.4 Privacy boundary (clarification)
+
+Adding to §4:
+
+| Signal | Leaves device? | Notes |
+|---|---|---|
+| Interest seeds (user-declared keywords) | yes — as plain noun phrases | Bounded list size + per-entry length; user can edit/clear. |
+| Preferred tone (optional) | yes — as a short user-supplied string | Plain text, not derived from any private content. |
+| Preferred formats (optional) | yes — as method slugs | Subset of the five canonical slugs only. |
+| Recent engagement titles (≤ 8) | yes — title only, 80-char cap | Per §4.1. |
+| Method slug per engagement | yes | Per §4.1. |
+| Recency bucket per engagement | yes — `today` / `this_week` / `older` | Per §4.1; precise timestamp never sent. |
+| Mood (if user selects one) | yes — canonical set only | Per §4.1; never inferred. |
+| Seed topic slug/title/summary | yes — bundled content, not user data | Per §4.1. |
+| Locale, time budget, exclude-prompt hashes | yes | Per §4.1. |
+| **Raw `ReflectionEntry.body`** | **NO** | Never, no exception. |
+| **Apple identity (Sign-In-with-Apple value)** | **NO** | Stays in Keychain. |
+| **DeviceActivity tokens / app-usage logs** | **NO** | Inapplicable today (parked) and disallowed always. |
+| **Engagement notes / private user text** | **NO** | Unless an explicit future consent surface ships. |
+
+When AI is disabled (`AIProviderPreference.disabled`), interest seeds stay local; Daily Direct falls through to seeded curiosity content + hardcoded fallback. Seeds existing on-device do not, by themselves, send anything anywhere.
+
+### 12.5 Future data home (not implemented)
+
+A future coding slice — **before Phase 6C or 6D wires anything live** — needs to land the storage for these seeds. Two candidate shapes:
+
+**Option A — extend `UserProfile`** with a `var interestSeeds: [String] = []` field.
+
+- ✅ Single local identity row; same place `displayName`, `activeRedirectMethod`, `activeReminderTheme` live.
+- ✅ Smallest schema change (one field).
+- ✅ Already wired into `ReDirectSchema.allModels`.
+- ⚠️ If personalization preferences grow past a simple list (toned, formats, mood-history, etc.), the row gets crowded.
+
+**Option B — new `PersonalizationPreferences` model**.
+
+- ✅ Room to grow (tone, formats, future mood preferences, future content-language preferences).
+- ✅ Decoupled from identity; easier to clear without touching `UserProfile`.
+- ⚠️ Adds a new model, a new `@Query` site, and one-to-one-with-`UserProfile` semantics that need policing.
+
+**Recommendation**: ship Option A first (one `interestSeeds: [String]` field on `UserProfile`). Migrate to Option B if/when the preference surface clearly exceeds a single list. Document this choice when the implementation slice opens; do not pre-commit it here.
+
+### 12.6 Onboarding surface (not implemented)
+
+Today's `OnboardingView` doesn't collect interest seeds. A future onboarding slice should:
+
+- Present a small editorial screen — "what do you want to be more curious about?" or similar — at first-launch.
+- Accept 3–8 short keywords (typed or selected from a starter set).
+- Persist them to `UserProfile.interestSeeds` (Option A) or the new model (Option B).
+- Skippable; defaults from §12.2 fill in for the personal v1 build.
+
+A Settings row should later allow the user to edit/clear the list. That surface ships in a future slice — not in 6A.1 and not in 6B.
+
+### 12.7 Rabbit-hole deepening tie-in (§6 Phase 6E amendment)
+
+When `Phase 6E` lands the deepening surface, the trail-generation payload uses the **same priority order** from §12.3, with one adjustment: interest seeds are the **north star** that keeps the trail thematically coherent. Specifically:
+
+1. **Interest seeds** — north star. The trail must stay in the user's declared interest gravity well. A bioluminescence root for a user whose seeds are `Apple, Machine Learning, Neuroscience` may legitimately bridge into `neural perception of low-light environments` but should not drift into `Renaissance maritime cartography` without an explicit user pivot.
+2. **Engagement history** — recent context. What the user just logged (the root) and what they've logged nearby tells the proxy what depth they're at.
+3. **Seeded topics** — safe fallback. When AI is unavailable, the deepening sheet renders a seeded `TopicTrail` for the root topic if one matches, with no AI involvement.
+4. **Bounded depth** — 3–5 steps. The 6E response shape (`steps[]`) already enforces this; the input priority doesn't change the cap.
+
+The trail-request payload in §7.3 will gain an `interest_seeds` field in the same shape used by Daily Direct. That extension is documented in §7 as a forward note when the trail endpoint actually ships.
+
+### 12.8 What 6A.1 did NOT do
+
+- Did not add the `interestSeeds` field to `UserProfile` (or any other model).
+- Did not modify `OnboardingView`.
+- Did not add a Settings surface for editing seeds.
+- Did not extend the proxy contract DTOs in `re_direct/AI*.swift`.
+- Did not write a single line of Swift.
+- Did not promise a ship date for the storage slice (§12.5) or onboarding slice (§12.6).
+
+What 6A.1 *did* do is establish that **personalization seeds are the first-class bootstrap signal** for Daily Direct, anchor the personal v1 defaults, and clarify the privacy boundary for those signals. The storage and surface slices follow as separate coding work before Phase 6D ships.
