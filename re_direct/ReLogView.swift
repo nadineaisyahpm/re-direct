@@ -96,6 +96,13 @@ struct ReLogView: View {
                             .offset(y: revealed ? 0 : 12)
                             .animation(.smooth.delay(0.55), value: revealed)
 
+                        ReflectionsSection(revealed: revealed)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 22)
+                            .opacity(revealed ? 1 : 0)
+                            .offset(y: revealed ? 0 : 12)
+                            .animation(.smooth.delay(0.62), value: revealed)
+
                         BoundarySessionsSection(revealed: revealed)
                             .padding(.horizontal, 24)
                             .padding(.top, 22)
@@ -737,6 +744,93 @@ struct RecentRabbitHolesSection: View {
         case "deep-dive": return "deep dive"
         default:          return slug
         }
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Reflections Section
+// ─────────────────────────────────────────────
+
+/// Read-only ledger of the user's most recent `ReflectionEntry` rows. The
+/// only writing surface is the REF2 reflect-method ritual; this section
+/// surfaces what got saved. No edit / delete / detail affordances yet —
+/// REF4 will reconsider those if they're needed.
+struct ReflectionsSection: View {
+
+    let revealed: Bool
+
+    @Query(
+        filter: #Predicate<ReflectionEntry> { $0.deletedAt == nil },
+        sort: \.createdAt,
+        order: .reverse
+    )
+    private var reflections: [ReflectionEntry]
+
+    private var visibleRows: [ReflectionEntry] {
+        Array(reflections.prefix(5))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            SectionHeader(
+                title: "Reflections",
+                caption: "what you wrote down",
+                captionAlignment: .trailing
+            )
+            .padding(.bottom, 12)
+
+            if reflections.isEmpty {
+                emptyState
+            } else {
+                populatedList
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("no reflections yet.")
+                .font(.custom("InstrumentSerif-Italic", size: 17))
+                .foregroundColor(DSColor.ink.opacity(0.70))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("saved reflections appear here.")
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(DSColor.ink.opacity(0.45))
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var populatedList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(visibleRows.enumerated()), id: \.element.id) { idx, entry in
+                if idx > 0 {
+                    Rectangle()
+                        .fill(DSColor.ink.opacity(0.12))
+                        .frame(height: 0.5)
+                }
+                reflectionRow(entry)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func reflectionRow(_ entry: ReflectionEntry) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(entry.body)
+                .font(.custom("InstrumentSerif-Italic", size: 17))
+                .foregroundColor(DSColor.ink)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(EngagementCaption.relativeDate(entry.createdAt))
+                .font(.system(size: 11, weight: .light))
+                .foregroundColor(DSColor.ink.opacity(0.55))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
     }
 }
 
