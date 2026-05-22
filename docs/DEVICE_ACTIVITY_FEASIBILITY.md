@@ -201,7 +201,7 @@ No `ManagedSettingsUI` extension in 7B unless authorization + shield-on-threshol
 - Persistent off-device traffic appears during the test session (would mean a misconfiguration we cannot diagnose locally).
 - The user (Nadine) decides the editorial product surface degrades — e.g., the system shield is too jarring for a "gentle boundary" product, or the authorization sheet copy creates friction that conflicts with the calm onboarding tone.
 
-If a stop condition triggers, capture the failure mode in a follow-up doc (`docs/DEVICE_ACTIVITY_BLOCKER.md`) and move to the fallback plan in §10.
+If a stop condition triggers, capture the failure mode in a follow-up doc (`docs/DEVICE_ACTIVITY_BLOCKER.md`) and move to the fallback plan in §11.
 
 ### 9.4 Deliverables of Phase 7B
 
@@ -211,7 +211,86 @@ If a stop condition triggers, capture the failure mode in a follow-up doc (`docs
 
 ---
 
-## 10. Fallback plan (if Phase 7B fails or Phase 7C is blocked)
+## 10. Phase 7B Workflow Guardrails
+
+§9 says *what* the spike has to prove. This section says *how* the spike is run — the rules of engagement that keep 7B bounded, reversible, and free of scope creep. These guardrails are part of the brief; running the spike without them is not running 7B.
+
+### 10.1 Charter
+
+**Phase 7B is a feasibility spike, not product implementation.** Its purpose is to answer the binary question "can re:direct present a real boundary-completion experience via FamilyControls + DeviceActivity + ManagedSettings on a signed device?" If the answer is yes, Phase 7C plans the production integration as its own slice. If the answer is no, the fallback plan (§11) is the product.
+
+Nothing produced inside 7B is shipped to users. The 7B branch is exploratory code on a sandboxed Apple ID, intended to be merged in spirit (via Phase 7C planning) rather than in commits.
+
+### 10.2 Branch policy
+
+7B work runs **on a dedicated feature branch**, never directly on `main`. The recommended name is `phase-7b-device-activity-spike` (matches `docs/GIT_WORKFLOW.md` §11 conventions). `main` continues to ship as the local-first prototype throughout.
+
+Until 7B-0 passes (§10.3), no branch is created. The branch is a sign that real entitlement-touching work has begun.
+
+### 10.3 Step sequence (7B-0 through 7B-5)
+
+The spike is broken into six ordered steps. Each step has **one binary result** recorded in `docs/DEVICE_ACTIVITY_SPIKE_RESULTS.md` — `pass`, `fail`, or `blocked`. No partial credit, no "we'll come back to it." A `fail` or `blocked` on any step triggers re-evaluation against §10.6's stop conditions.
+
+| Step | Title | Touches | Binary outcome |
+|---|---|---|---|
+| **7B-0** | Entitlement readiness | Apple Developer portal · Xcode signing & capabilities pane · Team membership · **no source code** | Can the developer's team request and provision the Family Controls entitlement on a development profile? `pass` / `fail` / `blocked` |
+| **7B-1** | Spike branch creation | `git` only — create `phase-7b-device-activity-spike` from current `main`; verify no main-branch commits accidentally land on it. **Only runs after 7B-0 passes.** | Branch exists; tracking remote; CI/local build still green from `main`'s last state. `pass` / `fail` / `blocked` |
+| **7B-2** | Target & capability scaffold | Xcode project — add `re_directMonitor` DeviceActivityMonitor extension target, App Group entitlement on both targets, `NSFamilyControlsUsageDescription` in `Info.plist`. No behavior; empty extension subclass. | App builds, signs, and runs on a real device with the new target embedded; no runtime regressions on `main`'s flow. `pass` / `fail` / `blocked` |
+| **7B-3** | Authorization + app picker | A single hidden debug entry that requests `.individual` authorization, presents `FamilyActivityPicker`, and persists the resulting `FamilyActivitySelection` to the App Group `UserDefaults`. | Sheet appears; user can pick a real app; selection round-trips a kill-and-relaunch. `pass` / `fail` / `blocked` |
+| **7B-4** | Monitor callback proof | Arm a short test schedule with a low-threshold `DeviceActivityEvent` against the saved selection. Log every `intervalDidStart` / `eventDidReachThreshold` / `intervalDidEnd` to the App Group from the extension. | `eventDidReachThreshold` fires reliably (≥4 of 5 runs) for the test app after real foreground use. `pass` / `fail` / `blocked` |
+| **7B-5** | Optional shield test | On `eventDidReachThreshold`, apply `ManagedSettingsStore.shield.applications` to the selection; on user action (e.g. opening the main app), clear the shield. | Shield appears on the picked app; main app clears it cleanly. **Optional** — if 7B-2 through 7B-4 pass, 7B-5 raises confidence but isn't required to call the spike a success. `pass` / `fail` / `blocked` / `skipped` |
+
+Each step's outcome is recorded with one sentence of evidence. "What was tried, what happened, what was learned" — not a story.
+
+### 10.4 Scope creep rule
+
+If during any 7B-N step an unexpected need surfaces — a bug in re:direct's `main` code, a tempting UX polish, an asset that "should really" be added, a refactor opportunity — **it does not get folded into the current step**. It gets written down as a follow-up slice and continued past.
+
+The only exception: the surface is **blocking the current step**. If the entitlement form requires a privacy-policy URL re:direct doesn't have, drafting that URL is in-scope because 7B-0 can't complete without it. If a model field is missing that the monitor extension genuinely needs to communicate with the app, the model change is in-scope. Anything cosmetic, tangential, or "while I'm in there" is **out**.
+
+Follow-up slices captured this way live in `docs/DEVICE_ACTIVITY_SPIKE_RESULTS.md` under a "**Deferred during 7B**" heading and feed back into ROADMAP as proposed slices after the spike ends.
+
+### 10.5 Out of scope for the entire spike
+
+Inside 7B, the following are **explicitly disallowed**, even if they look like they belong:
+
+- Reflection writing surfaces, post-ritual flow, REF3.1 trigger wiring.
+- Re:Log polish, Settings polish, Dashboard polish, re:tuals polish.
+- AI proxy implementation, AI prompt generation, AI-runtime ReflectionPrompt insertion.
+- CloudKit migration, sync work, multi-device anything.
+- Production UX changes — copy edits, animations, accessibility improvements outside what the new extension/picker requires.
+- `main` branch commits. The only thing that lands on `main` during 7B is documentation about the spike.
+- Notifications/UNUserNotificationCenter integration, unless directly required by the monitor extension callback proof (and even then, kept to the minimum).
+
+If a 7B step "needs" one of these to succeed, the step is a `blocked` outcome, not an excuse to widen the spike.
+
+### 10.6 Stop conditions
+
+Any one of these triggers a halt and a §11 fallback consideration:
+
+- **Family Controls capability unavailable** on the developer's team (e.g. Personal Team lacks access, entitlement request denied or pending past an acceptable window).
+- **Entitlement cannot be added** to the development profile (provisioning portal blocks it, or local Xcode refuses to merge the capability).
+- **Real-device build cannot sign** with the entitlement (codesigning errors, profile mismatch, no provisioning profile generated).
+- **Authorization cannot be requested** — `AuthorizationCenter.requestAuthorization(for: .individual)` throws unexpected errors on a signed real-device build, or the system sheet fails to appear.
+- **Picker cannot return usable tokens** — `FamilyActivityPicker` opens but yields no actionable `FamilyActivitySelection`, or selections fail to persist/round-trip via the App Group.
+- **Monitor extension cannot receive callbacks** — schedules are accepted but `eventDidReachThreshold` never fires, or the extension binary fails to dispatch on a signed real-device build.
+
+When a stop condition triggers, the failure is recorded in `docs/DEVICE_ACTIVITY_BLOCKER.md` (mode, environment, what was tried, what next), and the spike pauses. Re-attempts only resume after the blocker is genuinely cleared — not "let's try the same thing again."
+
+### 10.7 Deliverable
+
+The single artifact of Phase 7B is **`docs/DEVICE_ACTIVITY_SPIKE_RESULTS.md`**, written as the spike proceeds. It contains:
+
+- One section per step (7B-0 through 7B-5), each with outcome + evidence + any deferred follow-ups.
+- A summary verdict: go / no-go / partial-go for Phase 7C.
+- The current state of `docs/DEVICE_ACTIVITY_BLOCKER.md` if any stop condition triggered.
+- A merge-or-archive recommendation for the `phase-7b-device-activity-spike` branch.
+
+7B is **not** delivering an app feature. It is delivering a decision document. Anything that looks like an app feature emerging from 7B is misshapen scope creep — fold it back into a proper Phase 7C slice on `main` instead.
+
+---
+
+## 11. Fallback plan (if Phase 7B fails or Phase 7C is blocked)
 
 re:direct's product loop **does not depend on Screen Time succeeding**. The fallback is already partially built:
 
@@ -225,7 +304,7 @@ The fallback is the product re:direct already is today, with one extra honest li
 
 ---
 
-## 11. What this slice did NOT do
+## 12. What this slice did NOT do
 
 - Did not add or request the Family Controls entitlement.
 - Did not create any new Xcode target.
@@ -238,17 +317,17 @@ All of the above are explicit Phase 7B / 7C work, gated on this document being a
 
 ---
 
-## 12. Open questions for sign-off before Phase 7B
+## 13. Open questions for sign-off before Phase 7B
 
 1. **Is the entitlement-request risk acceptable?** Apple can deny. If denied, weeks of integration work are wasted. Recommendation: write the request justification now, against this brief, *before* Phase 7B starts, so we know what the pitch sounds like.
 2. **Is the .individual mode the right scope?** re:direct could theoretically support parental mode later; v1 should ship `.individual` only. Recommendation: confirm `.individual` and move on.
 3. **Do we ship `ManagedSettingsUI` (customized shield) in Phase 7C, or accept the default system shield in v1?** Customization is editorial-product-aligned but doubles the extension footprint. Recommendation: ship the customized shield only if Phase 7B passes cleanly; default shield is acceptable as a first cut.
 4. **Where does the shield's "redirect" CTA land — Dashboard, re:tuals, or Timer's post-session view?** This affects the deep-link plumbing. Recommendation: re:tuals, because the shield moment *is* the redirect moment, and re:tuals is the lane-history surface.
-5. **What's the rollback story if Apple changes APIs in iOS 19?** Recommendation: gate the entire Screen Time path behind a feature flag from day one; the fallback (`§10`) becomes the always-available branch.
+5. **What's the rollback story if Apple changes APIs in iOS 19?** Recommendation: gate the entire Screen Time path behind a feature flag from day one; the fallback (`§11`) becomes the always-available branch.
 
 ---
 
-## 13. References
+## 14. References
 
 - [Apple — FamilyControls](https://developer.apple.com/documentation/familycontrols)
 - [Apple — DeviceActivity](https://developer.apple.com/documentation/deviceactivity)
@@ -260,12 +339,12 @@ All of the above are explicit Phase 7B / 7C work, gated on this document being a
 
 ---
 
-## 14. Acceptance of this brief
+## 15. Acceptance of this brief
 
 This document is accepted when:
 
 - The Phase 7B spike scope (§9.1) is unambiguous to whoever runs it next.
 - The success criteria (§9.2) and stop conditions (§9.3) are clear enough that "the spike passed" is a binary call, not a judgment.
-- The fallback plan (§10) is plausible enough that **declining Screen Time entirely is a real product option**, not a hidden loss.
+- The fallback plan (§11) is plausible enough that **declining Screen Time entirely is a real product option**, not a hidden loss.
 
 Once accepted, Phase 7B can begin on its own branch. Until accepted, no entitlement is requested, no target is added, and `main` continues to ship as the local-first prototype it already is.

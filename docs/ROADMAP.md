@@ -183,7 +183,11 @@ User-facing language in `TimerView` should reflect arming, not real-time usage m
 | **Slice REF4** | Re:Log reflections section, **read-only**. Lists recent `ReflectionEntry` rows with tap-to-detail. No standalone "+ write a reflection" button. | proposed, depends on REF3 |
 | **Slice REF5** | AI-generated reflection prompts via proxy (opt-in, gated, in-sheet only); reflection text never transmitted | proposed, depends on REF1 + Phase 6 |
 | **Phase 6** | AI proxy implementation (Cloudflare Worker) + iOS client | future |
-| **Phase 7** | Screen Time API research spike | future |
+| **Phase 7** | Screen Time API research spike. See `docs/DEVICE_ACTIVITY_FEASIBILITY.md`. | future |
+| **Phase 7A-doc** | Feasibility brief — `docs/DEVICE_ACTIVITY_FEASIBILITY.md` §1–§9 + §11–§15. | done |
+| **Phase 7B-doc** | Workflow guardrails for the 7B spike — `docs/DEVICE_ACTIVITY_FEASIBILITY.md §10`. Charter, branch policy, 7B-0…7B-5 step sequence, scope-creep rule, stop conditions, deliverable. | done |
+| **Phase 7B** | DeviceActivity feasibility spike on `phase-7b-device-activity-spike` branch. Bounded by §10 guardrails; deliverable is `docs/DEVICE_ACTIVITY_SPIKE_RESULTS.md`, not an app feature. | proposed, depends on Phase 7B-doc |
+| **Phase 7C** | Production integration of Screen Time stack on `main`, only if Phase 7B returns go. Replaces REF2's and REF3's DEBUG triggers with real reminder/DeviceActivity events. | proposed, depends on Phase 7B (go) |
 | **Phase 8** | CloudKit private database sync | future |
 | **Phase 9** | TestFlight family/internal distribution | future |
 
