@@ -100,13 +100,32 @@ struct DashboardView: View {
         }
 
         @State private var activeIndex: Int = 0
+        @State private var aiCard: ReDirectTopic? = nil
+        @Environment(\.modelContext) private var modelContext
+
         @Query(sort: \CuriosityTopic.slug) private var seededTopics: [CuriosityTopic]
 
-        private var cards: [ReDirectTopic] {
+        /// Dev-only AI proxy URL. Hardcoded for Phase 6D-B because the iOS
+        /// app has no Settings field yet; the URL is harmless to ship —
+        /// no API key, the proxy itself rejects every request without a
+        /// configured Cloudflare secret. A future slice promotes this to
+        /// a build-config or Settings value.
+        private static let aiProxyURL = URL(
+            string: "https://re-direct-ai-proxy-dev.nadineaisyah170806.workers.dev"
+        )!
+
+        /// Seeded card list — unchanged behavior from before Phase 6D-B.
+        private var seededCards: [ReDirectTopic] {
             guard !seededTopics.isEmpty else { return ReDirectTopicData.topFive }
             return seededTopics.enumerated().map { offset, topic in
                 Self.adapt(topic: topic, indexedAt: offset)
             }
+        }
+
+        /// Active content source. AI override (1 card) wins; otherwise the
+        /// seeded list (N cards) renders. Defensively capped by the helper.
+        private var cards: [ReDirectTopic] {
+            DailyDirectMapping.displayCards(aiOverride: aiCard, seeded: seededCards)
         }
 
         private static let hexPattern = #"^#[0-9A-Fa-f]{6}$"#
@@ -215,6 +234,66 @@ struct DashboardView: View {
                     .frame(height: 320 + 28)
                 }
                 .frame(height: 320 + 28)
+            }
+            // One AI load per appearance — and only when no AI card is
+            // already cached in view state. Failure leaves `aiCard` nil,
+            // so the seeded list keeps rendering with no spinner / error.
+            .task {
+                guard aiCard == nil else { return }
+                await tryLoadAICard()
+            }
+        }
+
+        /// Composition root for the Dashboard's Daily Direct AI path.
+        /// Built lazily inside `.task` so the view's normal seeded path
+        /// has zero AI dependencies. No spinner, no error chrome — any
+        /// failure silently keeps the seeded display.
+        private func tryLoadAICard() async {
+            let config = AIProxyConfig(baseURL: Self.aiProxyURL)
+            let client = AIProxyHTTPClient(config: config)
+            let cache = SwiftDataAIRecommendationCache(context: modelContext)
+            let resolver = AIRecommendationResolver(
+                cache: cache,
+                seed: NoopSeededPromptProvider()
+            )
+            let loader = DailyDirectLoader(
+                resolver: resolver,
+                callProxy: client.call
+            )
+
+            // Snapshot the seeded topics for slug-keyed cover/accent
+            // lookup. Capturing the closure here keeps the mapping helper
+            // pure and Sendable-friendly.
+            let coverByTopic = Dictionary(uniqueKeysWithValues:
+                seededTopics.map { ($0.slug, $0.coverAssetName) }
+            )
+            let hexByTopic = Dictionary(uniqueKeysWithValues:
+                seededTopics.map { ($0.slug, $0.accentColorHex) }
+            )
+
+            let result = await loader.load()
+            let topic: ReDirectTopic?
+            switch result {
+            case .proxy(let response):
+                topic = DailyDirectMapping.adapt(
+                    response: response,
+                    coverAssetByTopicSlug: { coverByTopic[$0] },
+                    accentHexByTopicSlug: { hexByTopic[$0] }
+                )
+            case .localCache(let hit):
+                topic = DailyDirectMapping.adapt(
+                    cacheHit: hit,
+                    coverAssetByTopicSlug: { coverByTopic[$0] },
+                    accentHexByTopicSlug: { hexByTopic[$0] }
+                )
+            case .seedFallback:
+                // Resolver's seed-fallback path = AI failed. Dashboard
+                // already shows its own seeded list; do not override.
+                topic = nil
+            }
+
+            if let topic {
+                aiCard = topic
             }
         }
     }
