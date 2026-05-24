@@ -65,8 +65,16 @@ struct SwiftDataAIRecommendationCacheTests {
     }
 
     @Test func lookupReturnsMostRecentForSameKey() async throws {
+        // Injected clock so the deliberately-old fixture rows are still
+        // within the freshness window (added in Phase 6D-E). The test's
+        // intent — assert lookup returns the most-recent row when multiple
+        // rows share a key — is unchanged.
         let context = try makeContext()
-        let cache = SwiftDataAIRecommendationCache(context: context)
+        let injectedNow = Date(timeIntervalSince1970: 2_001)
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            now: { injectedNow }
+        )
         let key = AICacheKey(request: sampleRequest())
         let older = sampleResponse(hash: "old", at: Date(timeIntervalSince1970: 1_000))
         let newer = sampleResponse(hash: "new", at: Date(timeIntervalSince1970: 2_000))
@@ -187,5 +195,103 @@ struct SwiftDataAIRecommendationCacheTests {
         #expect(hit.topicTitle == "Self Sabotage")
         #expect(hit.promptBody == "Notice what you reach for when avoidance kicks in.")
         #expect(hit.suggestedMinutes == 8)
+    }
+
+    // MARK: - Freshness policy (Phase 6D-E)
+
+    @Test func defaultCacheTTLIs24Hours() {
+        #expect(SwiftDataAIRecommendationCache.defaultCacheTTL == 24 * 60 * 60)
+    }
+
+    @Test func lookupReturnsFreshRow() async throws {
+        // A row written "now" is freshly cached and must surface.
+        let context = try makeContext()
+        let nowAnchor = Date(timeIntervalSince1970: 2_000_000_000) // 2033 - some fixed point
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            cacheTTL: 24 * 60 * 60,
+            now: { nowAnchor }
+        )
+        let key = AICacheKey(request: sampleRequest())
+        let response = sampleResponse(hash: "fresh-row", at: nowAnchor)
+
+        await cache.store(response, for: key)
+        let hit = await cache.lookup(key)
+        #expect(hit?.promptInputHash == "fresh-row")
+    }
+
+    @Test func lookupHidesStaleRow() async throws {
+        // A row older than the TTL must be treated as a cache miss so the
+        // resolver proceeds to the proxy step.
+        let context = try makeContext()
+        let writtenAt = Date(timeIntervalSince1970: 2_000_000_000)
+        let staleNow = writtenAt.addingTimeInterval(25 * 60 * 60) // 25h later
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            cacheTTL: 24 * 60 * 60,
+            now: { staleNow }
+        )
+        let key = AICacheKey(request: sampleRequest())
+        let response = sampleResponse(hash: "stale-row", at: writtenAt)
+
+        await cache.store(response, for: key)
+        let hit = await cache.lookup(key)
+        #expect(hit == nil, "Stale row must be hidden from lookup")
+    }
+
+    @Test func lookupBoundaryIsInclusiveAtExactlyTTL() async throws {
+        // Exactly at TTL is considered stale (>=). The strictly-less-than
+        // boundary keeps the rule deterministic: a hit must be strictly
+        // newer than TTL ago.
+        let context = try makeContext()
+        let writtenAt = Date(timeIntervalSince1970: 2_000_000_000)
+        let exactlyAtTTL = writtenAt.addingTimeInterval(24 * 60 * 60)
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            cacheTTL: 24 * 60 * 60,
+            now: { exactlyAtTTL }
+        )
+        let key = AICacheKey(request: sampleRequest())
+        let response = sampleResponse(hash: "boundary-row", at: writtenAt)
+
+        await cache.store(response, for: key)
+        let hit = await cache.lookup(key)
+        #expect(hit == nil, "Row at exactly TTL must be considered stale")
+    }
+
+    @Test func lookupBoundaryStrictlyBeforeTTLIsFresh() async throws {
+        // One second before TTL → still fresh.
+        let context = try makeContext()
+        let writtenAt = Date(timeIntervalSince1970: 2_000_000_000)
+        let justBeforeTTL = writtenAt.addingTimeInterval(24 * 60 * 60 - 1)
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            cacheTTL: 24 * 60 * 60,
+            now: { justBeforeTTL }
+        )
+        let key = AICacheKey(request: sampleRequest())
+        let response = sampleResponse(hash: "almost-stale", at: writtenAt)
+
+        await cache.store(response, for: key)
+        let hit = await cache.lookup(key)
+        #expect(hit?.promptInputHash == "almost-stale")
+    }
+
+    @Test func lookupRespectsCustomTTL() async throws {
+        // Sanity: a 60-second TTL hides anything older than 60s.
+        let context = try makeContext()
+        let writtenAt = Date(timeIntervalSince1970: 2_000_000_000)
+        let oneMinuteLater = writtenAt.addingTimeInterval(61)
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            cacheTTL: 60,
+            now: { oneMinuteLater }
+        )
+        let key = AICacheKey(request: sampleRequest())
+        let response = sampleResponse(hash: "tiny-ttl", at: writtenAt)
+
+        await cache.store(response, for: key)
+        let hit = await cache.lookup(key)
+        #expect(hit == nil, "Custom TTL of 60s must hide a 61s-old row")
     }
 }

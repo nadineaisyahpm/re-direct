@@ -4,10 +4,30 @@ import SwiftData
 @MainActor
 struct SwiftDataAIRecommendationCache: AIRecommendationCache {
 
-    let context: ModelContext
+    /// Default freshness window for cached Daily Direct recommendations.
+    /// 24 h matches the proxy plan's recommended TTL — see
+    /// `docs/AI_INTEGRATION_PLAN.md` §5 and §9 (open question 3).
+    ///
+    /// Rule, plain English: "use cached AI content while it is fresh; only
+    /// allow a new proxy call after the freshness window expires." Stored
+    /// rows aren't deleted when they age out; they're just hidden from
+    /// `lookup(_:)` so the resolver proceeds to its proxy step. If the
+    /// proxy then succeeds, write-back (Phase 6D-D) replaces them with a
+    /// fresh row via dedup-by-`promptInputHash`.
+    static let defaultCacheTTL: TimeInterval = 24 * 60 * 60
 
-    init(context: ModelContext) {
+    let context: ModelContext
+    let cacheTTL: TimeInterval
+    let now: @Sendable () -> Date
+
+    init(
+        context: ModelContext,
+        cacheTTL: TimeInterval = SwiftDataAIRecommendationCache.defaultCacheTTL,
+        now: @Sendable @escaping () -> Date = { Date() }
+    ) {
         self.context = context
+        self.cacheTTL = cacheTTL
+        self.now = now
     }
 
     func lookup(_ key: AICacheKey) async -> AICacheHit? {
@@ -21,6 +41,15 @@ struct SwiftDataAIRecommendationCache: AIRecommendationCache {
         descriptor.fetchLimit = 1
 
         guard let row = (try? context.fetch(descriptor))?.first else { return nil }
+
+        // Freshness gate. Rows older than the TTL aren't surfaced — the
+        // resolver treats this as a cache miss and proceeds to the proxy
+        // step. The row stays in storage for diagnostic/audit purposes,
+        // and a successful proxy response will replace it via dedup-by-
+        // `promptInputHash` in the writer.
+        let age = now().timeIntervalSince(row.createdAt)
+        if age >= cacheTTL { return nil }
+
         return AICacheHit(
             promptInputHash: row.promptInputHash,
             topicSlug: row.topicSlugSnapshot,

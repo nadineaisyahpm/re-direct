@@ -226,4 +226,181 @@ struct AIRecommendationResolverTests {
         #expect(hit.provider == "deepseek")
         #expect(hit.modelVersion == "deepseek-v4-flash")
     }
+
+    // MARK: - Freshness policy (Phase 6D-E)
+
+    @Test func freshCacheAvoidsProxyCall() async throws {
+        let context = try makeContext()
+        let nowAnchor = Date(timeIntervalSince1970: 2_000_000_000)
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            cacheTTL: 24 * 60 * 60,
+            now: { nowAnchor }
+        )
+        let resolver = AIRecommendationResolver(cache: cache, seed: EmptySeed())
+        let request = sampleRequest()
+
+        // Seed a row whose createdAt is contemporaneous with the injected
+        // clock — well within the 24h freshness window.
+        let freshResponse = AIRecommendationResponse(
+            id: "rec-fresh",
+            topicSlug: "bioluminescence",
+            topicTitle: "Bioluminescence",
+            promptBody: "Fresh body.",
+            suggestedMinutes: 12,
+            provider: "deepseek",
+            modelVersion: "deepseek-v4-flash",
+            promptInputHash: "fresh",
+            cached: false,
+            createdAt: nowAnchor
+        )
+        cache.store(response: freshResponse, for: AICacheKey(request: request))
+
+        var proxyCallCount = 0
+        let result = await resolver.resolve(request: request) { _ in
+            proxyCallCount += 1
+            return sampleResponse(hash: "should-not-be-called")
+        }
+        if case .localCache(let hit) = result {
+            #expect(hit.promptInputHash == "fresh")
+        } else {
+            Issue.record("Expected .localCache for a fresh hit but got \(result)")
+        }
+        #expect(proxyCallCount == 0, "Fresh cache must avoid the proxy")
+    }
+
+    @Test func staleCacheAllowsProxyCall() async throws {
+        // Inject a "now" that's 25 hours after the cached row's createdAt
+        // so the cache marks the row stale.
+        let context = try makeContext()
+        let writtenAt = Date(timeIntervalSince1970: 2_000_000_000)
+        let staleNow = writtenAt.addingTimeInterval(25 * 60 * 60)
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            cacheTTL: 24 * 60 * 60,
+            now: { staleNow }
+        )
+        let resolver = AIRecommendationResolver(cache: cache, seed: EmptySeed())
+        let request = sampleRequest()
+
+        // Seed a stale row (createdAt is 25h before staleNow).
+        let staleResponse = AIRecommendationResponse(
+            id: "rec-stale",
+            topicSlug: "bioluminescence",
+            topicTitle: "Bioluminescence",
+            promptBody: "Old body.",
+            suggestedMinutes: 12,
+            provider: "deepseek",
+            modelVersion: "deepseek-v4-flash",
+            promptInputHash: "stale-hash",
+            cached: false,
+            createdAt: writtenAt
+        )
+        cache.store(response: staleResponse, for: AICacheKey(request: request))
+
+        var proxyCallCount = 0
+        let freshResponse = AIRecommendationResponse(
+            id: "rec-fresh",
+            topicSlug: "bioluminescence",
+            topicTitle: "Bioluminescence",
+            promptBody: "Fresh body.",
+            suggestedMinutes: 10,
+            provider: "deepseek",
+            modelVersion: "deepseek-v4-flash",
+            promptInputHash: "fresh-hash",
+            cached: false,
+            createdAt: staleNow
+        )
+        let result = await resolver.resolve(request: request) { _ in
+            proxyCallCount += 1
+            return freshResponse
+        }
+
+        if case .proxy(let r) = result {
+            #expect(r.promptInputHash == "fresh-hash")
+        } else {
+            Issue.record("Expected .proxy outcome after stale cache, got \(result)")
+        }
+        #expect(proxyCallCount == 1, "Stale cache must allow the proxy call")
+
+        // And the cache now contains both the stale + fresh row (writer
+        // dedupes on prompt_input_hash, not on staleness, so both stay).
+        let descriptor = FetchDescriptor<AIRecommendation>(
+            predicate: #Predicate { row in row.deletedAt == nil }
+        )
+        let rows = try context.fetch(descriptor)
+        let hashes = Set(rows.map { $0.promptInputHash })
+        #expect(hashes == ["stale-hash", "fresh-hash"])
+    }
+
+    @Test func staleCacheThenProxyFailureFallsBackGracefully() async throws {
+        // Even after a stale cache row, a proxy failure should not crash;
+        // the resolver falls back via its existing seed/last-resort path.
+        let context = try makeContext()
+        let writtenAt = Date(timeIntervalSince1970: 2_000_000_000)
+        let staleNow = writtenAt.addingTimeInterval(48 * 60 * 60) // 2 days later
+        let cache = SwiftDataAIRecommendationCache(
+            context: context,
+            cacheTTL: 24 * 60 * 60,
+            now: { staleNow }
+        )
+        let resolver = AIRecommendationResolver(cache: cache, seed: EmptySeed())
+        let request = sampleRequest()
+
+        cache.store(
+            response: AIRecommendationResponse(
+                id: "rec-stale2",
+                topicSlug: nil,
+                topicTitle: "Old",
+                promptBody: "Old.",
+                suggestedMinutes: 5,
+                provider: "deepseek",
+                modelVersion: "deepseek-v4-flash",
+                promptInputHash: "older-hash",
+                cached: false,
+                createdAt: writtenAt
+            ),
+            for: AICacheKey(request: request)
+        )
+
+        let result = await resolver.resolve(request: request) { _ in
+            throw AIProxyError.upstreamFailed
+        }
+
+        // Stale was bypassed → proxy was tried → proxy failed →
+        // seed fallback (EmptySeed returns nil → resolver's hardcoded
+        // last-resort kicks in).
+        if case .seedFallback(let seed, _) = result {
+            // The hardcoded last-resort uses topicSlug "default".
+            #expect(seed.topicSlug == "default")
+        } else {
+            Issue.record("Expected .seedFallback but got \(result)")
+        }
+    }
+
+    @Test func freshCacheUnaffectedByDefaultClock() async throws {
+        // Sanity: with the default (real-clock) initializer, a row stored
+        // a moment ago is still fresh and surfaces.
+        let context = try makeContext()
+        let cache = SwiftDataAIRecommendationCache(context: context)
+        let resolver = AIRecommendationResolver(cache: cache, seed: EmptySeed())
+        let request = sampleRequest()
+
+        cache.store(
+            response: sampleResponse(hash: "now-hash"),
+            for: AICacheKey(request: request)
+        )
+
+        var proxyCallCount = 0
+        let result = await resolver.resolve(request: request) { _ in
+            proxyCallCount += 1
+            return sampleResponse(hash: "x")
+        }
+        if case .localCache(let hit) = result {
+            #expect(hit.promptInputHash == "now-hash")
+        } else {
+            Issue.record("Expected .localCache, got \(result)")
+        }
+        #expect(proxyCallCount == 0)
+    }
 }
