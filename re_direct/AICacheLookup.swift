@@ -52,4 +52,18 @@ extension AICacheKey {
 protocol AIRecommendationCache: Sendable {
     func lookup(_ key: AICacheKey) async -> AICacheHit?
     func recentPromptInputHashes(limit: Int) async -> [String]
+
+    /// Persist a successful proxy response. Optional — read-only cache
+    /// stubs and test fakes can omit this and inherit the no-op default
+    /// from the protocol extension. The production
+    /// `SwiftDataAIRecommendationCache` overrides with a real upsert that
+    /// dedupes on `promptInputHash`.
+    func store(_ response: AIRecommendationResponse, for key: AICacheKey) async
+}
+
+extension AIRecommendationCache {
+    /// Default no-op. Lets existing in-memory stubs satisfy the protocol
+    /// without inventing storage; the resolver's write-back step becomes
+    /// a harmless await on those caches.
+    func store(_ response: AIRecommendationResponse, for key: AICacheKey) async {}
 }

@@ -104,4 +104,88 @@ struct SwiftDataAIRecommendationCacheTests {
         let hashes = await cache.recentPromptInputHashes(limit: 2)
         #expect(hashes == ["h5", "h4"])
     }
+
+    // MARK: - Protocol-conforming write-back (Phase 6D-D)
+
+    @Test func protocolStoreInsertsWhenAbsent() async throws {
+        let context = try makeContext()
+        let cache = SwiftDataAIRecommendationCache(context: context)
+        let key = AICacheKey(request: sampleRequest())
+        let response = sampleResponse(hash: "abc-protocol")
+
+        await cache.store(response, for: key)
+
+        // Round-trip via lookup confirms the row landed.
+        let hit = await cache.lookup(key)
+        #expect(hit?.promptInputHash == "abc-protocol")
+        #expect(hit?.topicTitle == "Bioluminescence")
+        #expect(hit?.provider == "anthropic-haiku-4-5")
+        #expect(hit?.modelVersion == "claude-haiku-4-5-20251001")
+    }
+
+    @Test func protocolStoreDedupesOnPromptInputHash() async throws {
+        let context = try makeContext()
+        let cache = SwiftDataAIRecommendationCache(context: context)
+        let key = AICacheKey(request: sampleRequest())
+        let response = sampleResponse(hash: "abc-dedup")
+
+        // Three consecutive write-backs with the same prompt_input_hash
+        // should result in only one row in storage.
+        await cache.store(response, for: key)
+        await cache.store(response, for: key)
+        await cache.store(response, for: key)
+
+        let descriptor = FetchDescriptor<AIRecommendation>(
+            predicate: #Predicate { row in
+                row.promptInputHash == "abc-dedup" && row.deletedAt == nil
+            }
+        )
+        let rows = try context.fetch(descriptor)
+        #expect(rows.count == 1, "Dedup should prevent duplicate active rows for the same hash")
+    }
+
+    @Test func protocolStoreAllowsDistinctHashes() async throws {
+        let context = try makeContext()
+        let cache = SwiftDataAIRecommendationCache(context: context)
+        let key = AICacheKey(request: sampleRequest())
+
+        await cache.store(sampleResponse(hash: "h-one"), for: key)
+        await cache.store(sampleResponse(hash: "h-two"), for: key)
+        await cache.store(sampleResponse(hash: "h-three"), for: key)
+
+        let descriptor = FetchDescriptor<AIRecommendation>(
+            predicate: #Predicate { row in row.deletedAt == nil }
+        )
+        let rows = try context.fetch(descriptor)
+        #expect(rows.count == 3)
+        #expect(Set(rows.map { $0.promptInputHash }) == ["h-one", "h-two", "h-three"])
+    }
+
+    @Test func protocolStorePreservesProviderAndModelFields() async throws {
+        let context = try makeContext()
+        let cache = SwiftDataAIRecommendationCache(context: context)
+        let key = AICacheKey(request: sampleRequest())
+        let response = AIRecommendationResponse(
+            id: "rec-fields",
+            topicSlug: "self-sabotage",
+            topicTitle: "Self Sabotage",
+            promptBody: "Notice what you reach for when avoidance kicks in.",
+            suggestedMinutes: 8,
+            provider: "deepseek",
+            modelVersion: "deepseek-v4-flash",
+            promptInputHash: "field-hash",
+            cached: false,
+            createdAt: Date()
+        )
+
+        await cache.store(response, for: key)
+        let hit = try #require(await cache.lookup(key))
+        #expect(hit.provider == "deepseek")
+        #expect(hit.modelVersion == "deepseek-v4-flash")
+        #expect(hit.promptInputHash == "field-hash")
+        #expect(hit.topicSlug == "self-sabotage")
+        #expect(hit.topicTitle == "Self Sabotage")
+        #expect(hit.promptBody == "Notice what you reach for when avoidance kicks in.")
+        #expect(hit.suggestedMinutes == 8)
+    }
 }

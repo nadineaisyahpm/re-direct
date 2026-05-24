@@ -75,4 +75,26 @@ struct SwiftDataAIRecommendationCache: AIRecommendationCache {
         context.insert(row)
         try? context.save()
     }
+
+    /// `AIRecommendationCache` protocol entry point — what the resolver
+    /// calls after a successful proxy response. Skips the insert if a
+    /// non-deleted row with the same `promptInputHash` already exists,
+    /// preventing duplicate accumulation across cache-miss-then-hit
+    /// sequences in the same session.
+    func store(_ response: AIRecommendationResponse, for key: AICacheKey) async {
+        if hasExistingRow(matching: response.promptInputHash) { return }
+        store(response: response, for: key, linkingTo: nil)
+    }
+
+    private func hasExistingRow(matching promptInputHash: String) -> Bool {
+        let hash = promptInputHash
+        var descriptor = FetchDescriptor<AIRecommendation>(
+            predicate: #Predicate { row in
+                row.promptInputHash == hash && row.deletedAt == nil
+            }
+        )
+        descriptor.fetchLimit = 1
+        let rows = (try? context.fetch(descriptor)) ?? []
+        return !rows.isEmpty
+    }
 }

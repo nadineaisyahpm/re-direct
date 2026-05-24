@@ -50,6 +50,12 @@ struct AIRecommendationResolver: Sendable {
 
         do {
             let response = try await callProxy(request)
+            // Write-back: persist the fresh response so the next resolve()
+            // (this session or a future cold launch, depending on the
+            // cache's durability) can hit cache without calling the proxy.
+            // Read-only cache stubs get the default no-op from the
+            // `AIRecommendationCache` protocol extension and skip this.
+            await cache.store(response, for: AICacheKey(request: request))
             return .proxy(response)
         } catch let error as AIProxyError where error.triggersSeededFallback {
             let reason: AIRecommendationSource.FallbackReason
