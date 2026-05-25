@@ -24,6 +24,7 @@ Companion repo (sibling, separate git history):
 - `docs/AI_INTEGRATION_PLAN.md`
 - `docs/AI_PROXY_IMPLEMENTATION_PLAN.md`
 - `docs/REFLECTION_ARCHITECTURE.md`
+- `docs/RABBIT_HOLE_THREADS.md`
 - `docs/DEVICE_ACTIVITY_FEASIBILITY.md`
 - `docs/SLICE_E1_ENGAGEMENT.md`
 - `docs/AUTH_SETUP.md`
@@ -60,7 +61,7 @@ Preserved invariants:
 - TimerView must not become a generic stopwatch / countdown timer.
 
 Added since the last handoff:
-- **Rabbit Hole Threads are the next proposed architecture direction** — to be specified in RH0. Until that doc lands, do not invent new engagement-related models.
+- **Rabbit Hole Threads architecture is locked in `docs/RABBIT_HOLE_THREADS.md` (RH0, done).** Threads are topic-centric, optional, cross-method, and group `CuriosityEngagement` rows without modifying them. The §13 anti-scope-creep rules are load-bearing — do not cross them without amending that doc first. RH1 (SwiftData model) is the next implementation slice.
 - **Do not delete `TimerSession` without a migration plan.** The model still ships and Re:Log shows its data; v1 may de-emphasize the surface but the row remains.
 - **Do not continue building Timer/DeviceActivity as v1 core** unless the user explicitly resumes Phase 7. Treat any work in that direction as Phase 7B / Phase 7C and apply the `docs/DEVICE_ACTIVITY_FEASIBILITY.md §10` workflow guardrails.
 
@@ -177,8 +178,8 @@ Hard rules:
 
 ## Likely next slices (proposed, not started)
 
-- **RH0** — Rabbit Hole Threads architecture doc. The next direction the user wants designed before any code lands. Documentation-only; defines the model, the surface, and the relationship to existing `CuriosityEngagement` rows.
-- **RH1** — `RabbitHoleThread` SwiftData model + relationships, after RH0 approval.
+- **RH1** — `RabbitHoleThread` SwiftData model + `ThreadStatus` / `ThreadSourceKind` enums + ordering mechanism + tests. No UI. Next implementation slice; gated only on user signal to proceed. See `docs/RABBIT_HOLE_THREADS.md §11`.
+- **RH2–RH5** — user-facing thread surface, 6E ↔ thread bridge, re:tuals grouping, Dashboard "continue thread" Daily Direct variant. Sequenced in `docs/RABBIT_HOLE_THREADS.md §11`.
 - **Timer de-centering / Direct surface planning** — the broader v1 re-shape that takes Timer out of the center and puts AI-guided redirection + rabbit-hole threads there.
 - **Phase 7B** — DeviceActivity feasibility spike. **Parked**, pending Apple Developer Program + Family Controls entitlement access. Resume only on explicit user signal.
 - **REF3 / REF3.1** — post-ritual reflection (per `docs/REFLECTION_ARCHITECTURE.md` §11). Defined; not implemented.
@@ -188,5 +189,5 @@ Hard rules:
 
 1. Run `git status --short`. Confirm only the known `re_direct.xcodeproj/project.pbxproj` signing drift is unstaged (if present); no other working-tree changes expected. Confirm `origin/main` is in sync.
 2. Read the docs listed under **Read first**, especially `docs/AI_INTEGRATION_PLAN.md`, `docs/REFLECTION_ARCHITECTURE.md`, and this file.
-3. Default next action: **start RH0 planning** — open a documentation-only slice that drafts `docs/RABBIT_HOLE_THREADS.md`, defining the proposed thread model, its relationship to `CuriosityEngagement`, and the v1 surface implications. Do not write Swift code until RH0 is accepted.
+3. Default next action: **propose RH1** — `RabbitHoleThread` SwiftData model + enums + ordering mechanism + tests, per `docs/RABBIT_HOLE_THREADS.md §11`. Do not start coding until the user approves the slice scope.
 4. Stop and ask if the user redirects to something else (e.g. Slice 7.1, a polish pass, or resuming Phase 7).

@@ -96,6 +96,8 @@ CuriosityEngagement
 
 Creation surfaces are designed in Slice E1 before any model code lands.
 
+`CuriosityEngagement` is also the atomic record that the future `RabbitHoleThread` (RH0/RH1) groups. Threading is optional and cross-method — see `docs/RABBIT_HOLE_THREADS.md`. Engagement shape is unchanged by RH0.
+
 ### What changed semantically in this brief
 
 Earlier work (through Slice 8) briefly counted `TimerSession` rows as "rabbit holes" in the Re:Log widget. **That was wrong** and was rolled back in Slice 8.1. The corrected model:
@@ -198,6 +200,12 @@ User-facing language in `TimerView` should reflect arming, not real-time usage m
 | **Phase 7C** | Production integration of Screen Time stack on `main`, only if Phase 7B returns go. Replaces REF2's and REF3's DEBUG triggers with real reminder/DeviceActivity events. | parked, depends on Phase 7B (go) |
 | **Phase 8** | CloudKit private database sync | future |
 | **Phase 9** | TestFlight family/internal distribution | future |
+| **RH0** | Rabbit Hole Threads architecture brief — `docs/RABBIT_HOLE_THREADS.md`. Defines `RabbitHoleThread`, its optional, cross-method relationship to `CuriosityEngagement`, the Phase 6E → thread persistence bridge, and the RH1–RH5 slice sequence. Documentation-only. | done |
+| **RH1** | `RabbitHoleThread` SwiftData model + `ThreadStatus` / `ThreadSourceKind` enums + ordering mechanism + tests. No UI; threads creatable only in tests. | proposed, depends on RH0 |
+| **RH2** | First user-facing thread surface: "thread this engagement" affordance + thread-detail read view + Re:Log Recent Rabbit Holes collapses threaded rows. | proposed, depends on RH1 |
+| **RH3** | Joint Phase 6E ↔ thread persistence — accepted AI trail materializes one `.aiDeepened` thread per `docs/RABBIT_HOLE_THREADS.md §6`. | proposed, depends on RH1 + Phase 6E |
+| **RH4** | re:tuals back-face groups engagements by thread (read-only). | proposed, depends on RH2 |
+| **RH5** | Dashboard "continue an open thread" Daily Direct variant — local-only selection; no proxy contract change. | proposed, depends on RH3 |
 
 ### Slice T-shared (notes)
 
