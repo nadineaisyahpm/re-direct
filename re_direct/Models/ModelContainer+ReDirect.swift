@@ -18,6 +18,7 @@ enum ReDirectSchema {
         ScreenTimeSummary.self,
         AIRecommendation.self,
         CuriosityEngagement.self,
+        RabbitHoleThread.self,
         ReflectionPrompt.self,
     ]
 

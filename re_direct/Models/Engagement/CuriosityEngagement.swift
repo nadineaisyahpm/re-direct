@@ -48,6 +48,12 @@ final class CuriosityEngagement {
     /// Not required — engagement can happen without a timer running.
     var session: TimerSession? = nil
 
+    /// Optional link to the `RabbitHoleThread` this engagement belongs to.
+    /// Threading is optional (RH0 §4): engagements with `thread == nil` are
+    /// valid and first-class. Set only by the future thread creation surfaces
+    /// (RH2 manual, RH3 AI-deepened); never inferred or auto-backfilled.
+    var thread: RabbitHoleThread? = nil
+
     /// Optional link to a `ReflectionEntry` written about this engagement.
     /// For the Reflect-method ritual, this is set on the same save that
     /// creates the engagement (the writing *is* the engagement). For post-
