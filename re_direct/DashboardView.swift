@@ -267,9 +267,17 @@ struct DashboardView: View {
                 cache: cache,
                 seed: NoopSeededPromptProvider()
             )
+            // Capture `client` explicitly via a closure rather than passing
+            // `client.call` as a method reference. Partial application of an
+            // async instance method synthesizes an implicit @Sendable closure
+            // whose captured-value lifetime is unsafe across multiple await
+            // suspensions on physical device — observed as a corrupted
+            // `AIRecommendationRequest` (garbage bytes in `interests.count`
+            // and `mood`) by the time the proxy client tried to encode it.
+            // An explicit closure makes the capture-by-value clean.
             let loader = DailyDirectLoader(
                 resolver: resolver,
-                callProxy: client.call
+                callProxy: { request in try await client.call(request) }
             )
 
             // Snapshot the seeded topics for slug-keyed cover/accent
