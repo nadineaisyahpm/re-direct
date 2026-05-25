@@ -123,6 +123,80 @@ struct AIProxyHTTPClientTests {
         #expect(json.contains("\"locale\""))
     }
 
+    @Test func encodedBodyHasExactExpectedKeySet() throws {
+        // Tighter contract than the substring check above: parse the JSON
+        // and assert the top-level keys are *exactly* the allowlisted set.
+        let body = try AIProxyHTTPClient.encodeBody(makeValidRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+
+        // With mood non-nil, all six keys are present.
+        let expected: Set<String> = [
+            "interests",
+            "mood",
+            "time_available_minutes",
+            "exclude_prompt_hashes",
+            "provider_preference",
+            "locale",
+        ]
+        #expect(Set(object.keys) == expected)
+    }
+
+    @Test func encodedBodyOmitsMoodWhenNil() throws {
+        let request = AIRecommendationRequest(
+            interests: ["AI"],
+            mood: nil,
+            timeAvailableMinutes: 15,
+            excludePromptHashes: [],
+            providerPreference: .auto,
+            locale: "en-US"
+        )
+        let body = try AIProxyHTTPClient.encodeBody(request)
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        #expect(object["mood"] == nil, "mood key must be omitted when nil")
+        // Other keys must still be present.
+        #expect(object["interests"] != nil)
+        #expect(object["time_available_minutes"] != nil)
+        #expect(object["exclude_prompt_hashes"] != nil)
+        #expect(object["provider_preference"] != nil)
+        #expect(object["locale"] != nil)
+    }
+
+    @Test func encodedBodyIncludesMoodWhenSet() throws {
+        let body = try AIProxyHTTPClient.encodeBody(makeValidRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        let mood = try #require(object["mood"] as? String)
+        #expect(mood == "curious")
+    }
+
+    @Test func encodedBodyProviderPreferenceEncodesAsStringAuto() throws {
+        let body = try AIProxyHTTPClient.encodeBody(makeValidRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        let pref = try #require(object["provider_preference"] as? String)
+        #expect(pref == "auto")
+    }
+
+    @Test func encodedBodyValueTypesArePrimitiveJSON() throws {
+        // JSONSerialization round-trips to native types. Confirm we're not
+        // accidentally emitting nested objects for what should be primitives.
+        let body = try AIProxyHTTPClient.encodeBody(makeValidRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        #expect(object["interests"] is [String])
+        #expect(object["exclude_prompt_hashes"] is [String])
+        #expect(object["time_available_minutes"] is NSNumber)
+        #expect(object["provider_preference"] is String)
+        #expect(object["locale"] is String)
+    }
+
     @Test func encodedBodyDoesNotIncludeForbiddenFields() throws {
         let body = try AIProxyHTTPClient.encodeBody(makeValidRequest())
         let json = try #require(String(data: body, encoding: .utf8))

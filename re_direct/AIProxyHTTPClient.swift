@@ -78,9 +78,42 @@ struct AIProxyHTTPClient: Sendable {
 
     /// Pure JSON encoding. Lifted to a static so tests can assert the
     /// produced payload contains only allowlisted snake_case keys.
+    ///
+    /// **Why JSONSerialization instead of `JSONEncoder.aiProxy.encode(...)`:**
+    /// the generic Codable path produced an on-device pause / crash inside
+    /// `JSONEncoder` before any network call. By building an explicit
+    /// allowlisted dictionary and encoding via `JSONSerialization`, we
+    /// (a) sidestep the Codable machinery that was failing on physical
+    /// devices, and (b) make the wire contract impossible to widen by a
+    /// future `AIRecommendationRequest` field addition — any new property
+    /// must be explicitly added to the allowlist below to ever leave the
+    /// device.
+    ///
+    /// Privacy invariant: keys here are the only fields that may ever leave
+    /// the device. Adding to this list requires updating
+    /// `docs/AI_INTEGRATION_PLAN.md §4`.
     static func encodeBody(_ request: AIRecommendationRequest) throws -> Data {
+        var json: [String: Any] = [
+            "interests": request.interests,
+            "time_available_minutes": request.timeAvailableMinutes,
+            "exclude_prompt_hashes": request.excludePromptHashes,
+            "provider_preference": request.providerPreference.rawValue,
+            "locale": request.locale,
+        ]
+        // Mood is optional on the request; omit the key entirely when nil.
+        // This mirrors the previous `encodeIfPresent` Codable behavior.
+        if let mood = request.mood {
+            json["mood"] = mood
+        }
+
         do {
-            return try JSONEncoder.aiProxy.encode(request)
+            // `.sortedKeys` keeps output deterministic for tests and proxy
+            // request logs. No effect on the wire contract — the proxy
+            // parses by key name.
+            return try JSONSerialization.data(
+                withJSONObject: json,
+                options: [.sortedKeys]
+            )
         } catch {
             throw AIProxyError.decoding
         }
