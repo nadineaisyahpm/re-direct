@@ -261,28 +261,44 @@ struct DashboardView: View {
         /// or `nil` on `.seedFallback` (Dashboard already owns its own
         /// seeded display; the resolver's seed result is unused here).
         private func loadAICardFromProxy() async -> ReDirectTopic? {
+            // DIAGNOSTIC SIMPLIFICATION (post-RH2 AI debugging).
+            //
+            // The full `DailyDirectLoader → AIRecommendationResolver →
+            // callProxy(request) → AIProxyHTTPClient.call` chain crashed on
+            // physical ARM64e device with EXC_BAD_ACCESS at the proxy
+            // client's request access. The `request` arrived at the proxy
+            // with corrupted bytes / de-authenticated pointer despite being
+            // valid at construction. Tests pass in the simulator (which is
+            // not ARM64e), so this is suspected Swift 6 strict-concurrency
+            // × ARM64e codegen interaction at the multi-hop async boundary.
+            //
+            // To unblock Daily Direct on device, this method now bypasses
+            // the resolver/loader entirely and calls the proxy directly
+            // from MainActor. Trade-offs:
+            //   - Lost: 24h SwiftData cache lookup before the call.
+            //   - Lost: write-back of fresh proxy responses to that cache.
+            //   - Lost: resolver's seeded-fallback ladder on proxy error
+            //          (the Dashboard's own seeded display is still shown
+            //           when `nil` is returned here, so the user always
+            //           sees something — the loss is the resolver-level
+            //           seed prompt selection, which Dashboard ignored
+            //           anyway via the .seedFallback → nil branch below).
+            //
+            // The cache + resolver paths remain fully covered by tests and
+            // can be re-attached once the device crash is understood.
             let client = AIProxyHTTPClient(config: AIEnvironment.dailyDirect)
-            let cache = SwiftDataAIRecommendationCache(context: modelContext)
-            let resolver = AIRecommendationResolver(
-                cache: cache,
-                seed: NoopSeededPromptProvider()
-            )
-            // Capture `client` explicitly via a closure rather than passing
-            // `client.call` as a method reference. Partial application of an
-            // async instance method synthesizes an implicit @Sendable closure
-            // whose captured-value lifetime is unsafe across multiple await
-            // suspensions on physical device — observed as a corrupted
-            // `AIRecommendationRequest` (garbage bytes in `interests.count`
-            // and `mood`) by the time the proxy client tried to encode it.
-            // An explicit closure makes the capture-by-value clean.
-            let loader = DailyDirectLoader(
-                resolver: resolver,
-                callProxy: { request in try await client.call(request) }
+
+            // Build the request right here on MainActor. The struct lives
+            // in this function's frame for its entire lifetime — only one
+            // async hop (into `client.call`) instead of three.
+            let request = AIRecommendationRequest(
+                interests: DailyDirectLoader.defaultPersonalInterestSeeds,
+                timeAvailableMinutes: DailyDirectLoader.defaultTimeBudgetMinutes,
+                locale: DailyDirectLoader.normalizeLocale(Locale.current.identifier)
             )
 
-            // Snapshot the seeded topics for slug-keyed cover/accent
-            // lookup. Capturing the closure here keeps the mapping helper
-            // pure and Sendable-friendly.
+            // Snapshot seeded topics for slug-keyed cover/accent lookup
+            // (mapping helper remains pure).
             let coverByTopic = Dictionary(uniqueKeysWithValues:
                 seededTopics.map { ($0.slug, $0.coverAssetName) }
             )
@@ -290,21 +306,16 @@ struct DashboardView: View {
                 seededTopics.map { ($0.slug, $0.accentColorHex) }
             )
 
-            let result = await loader.load()
-            switch result {
-            case .proxy(let response):
+            do {
+                let response = try await client.call(request)
                 return DailyDirectMapping.adapt(
                     response: response,
                     coverAssetByTopicSlug: { coverByTopic[$0] },
                     accentHexByTopicSlug: { hexByTopic[$0] }
                 )
-            case .localCache(let hit):
-                return DailyDirectMapping.adapt(
-                    cacheHit: hit,
-                    coverAssetByTopicSlug: { coverByTopic[$0] },
-                    accentHexByTopicSlug: { hexByTopic[$0] }
-                )
-            case .seedFallback:
+            } catch {
+                // Any failure (network, decoding, proxy error) silently
+                // falls back to the Dashboard's seeded display.
                 return nil
             }
         }
