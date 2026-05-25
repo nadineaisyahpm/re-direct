@@ -261,41 +261,42 @@ struct DashboardView: View {
         /// or `nil` on `.seedFallback` (Dashboard already owns its own
         /// seeded display; the resolver's seed result is unused here).
         private func loadAICardFromProxy() async -> ReDirectTopic? {
-            // DIAGNOSTIC SIMPLIFICATION (post-RH2 AI debugging).
+            // Daily Direct AI path — direct cache + proxy, no resolver chain.
             //
-            // The full `DailyDirectLoader → AIRecommendationResolver →
+            // Why no resolver / loader: the full
+            // `DailyDirectLoader → AIRecommendationResolver →
             // callProxy(request) → AIProxyHTTPClient.call` chain crashed on
-            // physical ARM64e device with EXC_BAD_ACCESS at the proxy
-            // client's request access. The `request` arrived at the proxy
-            // with corrupted bytes / de-authenticated pointer despite being
-            // valid at construction. Tests pass in the simulator (which is
-            // not ARM64e), so this is suspected Swift 6 strict-concurrency
-            // × ARM64e codegen interaction at the multi-hop async boundary.
+            // physical ARM64e device with EXC_BAD_ACCESS — the request
+            // struct's bytes (or, after class conversion, the class
+            // pointer's PAC) were mangled across the multi-hop
+            // @Sendable async boundary. Simulator (no PAC) was fine.
+            // Suspected Swift 6 strict-concurrency × ARM64e codegen
+            // interaction at the multi-hop boundary.
             //
-            // To unblock Daily Direct on device, this method now bypasses
-            // the resolver/loader entirely and calls the proxy directly
-            // from MainActor. Trade-offs:
-            //   - Lost: 24h SwiftData cache lookup before the call.
-            //   - Lost: write-back of fresh proxy responses to that cache.
-            //   - Lost: resolver's seeded-fallback ladder on proxy error
-            //          (the Dashboard's own seeded display is still shown
-            //           when `nil` is returned here, so the user always
-            //           sees something — the loss is the resolver-level
-            //           seed prompt selection, which Dashboard ignored
-            //           anyway via the .seedFallback → nil branch below).
+            // Mitigation: call `client.call` directly from MainActor with
+            // the request constructed in the same frame — exactly one
+            // async hop. Cache lookup and write-back are re-attached
+            // inline here so local-first behavior is preserved:
+            //   - Fresh cache hit (< 24h) → returned without a proxy call.
+            //   - Cache miss/stale → proxy call, then write-back.
+            //   - Any proxy error → silent fallback to Dashboard's seeded
+            //     display (this function returns nil).
             //
-            // The cache + resolver paths remain fully covered by tests and
-            // can be re-attached once the device crash is understood.
+            // `AIRecommendationResolver` + `DailyDirectLoader` remain on
+            // the codebase, covered by tests; we can re-attach them when
+            // the ARM64e issue is understood or a Swift/Xcode update lands.
             let client = AIProxyHTTPClient(config: AIEnvironment.dailyDirect)
+            let cache = SwiftDataAIRecommendationCache(context: modelContext)
 
             // Build the request right here on MainActor. The struct lives
-            // in this function's frame for its entire lifetime — only one
-            // async hop (into `client.call`) instead of three.
+            // in this function's frame for its entire lifetime; only one
+            // async hop (into `client.call`) crosses an isolation domain.
             let request = AIRecommendationRequest(
                 interests: DailyDirectLoader.defaultPersonalInterestSeeds,
                 timeAvailableMinutes: DailyDirectLoader.defaultTimeBudgetMinutes,
                 locale: DailyDirectLoader.normalizeLocale(Locale.current.identifier)
             )
+            let cacheKey = AICacheKey(request: request)
 
             // Snapshot seeded topics for slug-keyed cover/accent lookup
             // (mapping helper remains pure).
@@ -306,16 +307,30 @@ struct DashboardView: View {
                 seededTopics.map { ($0.slug, $0.accentColorHex) }
             )
 
+            // 1. Cache lookup. Stays on MainActor (cache is @MainActor).
+            //    A fresh hit short-circuits the proxy call entirely.
+            if let hit = await cache.lookup(cacheKey) {
+                return DailyDirectMapping.adapt(
+                    cacheHit: hit,
+                    coverAssetByTopicSlug: { coverByTopic[$0] },
+                    accentHexByTopicSlug: { hexByTopic[$0] }
+                )
+            }
+
+            // 2. Cache miss or stale → one direct proxy call.
             do {
                 let response = try await client.call(request)
+                // 3. Write back so the next cold launch can hit cache
+                //    within the 24h freshness window.
+                await cache.store(response, for: cacheKey)
                 return DailyDirectMapping.adapt(
                     response: response,
                     coverAssetByTopicSlug: { coverByTopic[$0] },
                     accentHexByTopicSlug: { hexByTopic[$0] }
                 )
             } catch {
-                // Any failure (network, decoding, proxy error) silently
-                // falls back to the Dashboard's seeded display.
+                // 4. Any failure (network, decoding, proxy error) silently
+                //    falls back to the Dashboard's seeded display via nil.
                 return nil
             }
         }
