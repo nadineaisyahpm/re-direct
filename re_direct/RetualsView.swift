@@ -221,6 +221,22 @@ struct RetualsView: View {
                         .padding(.top, 12)
                         .padding(.horizontal, 20)
 
+                        // Active-method selection panel (RH2-A/B).
+                        // Reads the front card; CTA writes to ActiveMethodStore.
+                        // Swiping the deck changes the panel copy but does NOT
+                        // commit selection — only a tap on the CTA does.
+                        ActiveMethodSelectionPanel(
+                            ritual: rituals.first,
+                            activeSlug: activeMethodStore.activeRedirectMethodSlug,
+                            onSelect: { slug in
+                                withAnimation(.smooth) {
+                                    activeMethodStore.activeRedirectMethodSlug = slug
+                                }
+                            }
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+
                         WhenTimerEndsCard(selectedRitual: selectedRitual)
                             .padding(.horizontal, 20)
                             .padding(.top, 42)
@@ -1383,6 +1399,159 @@ enum EngagementCaption {
         guard let s = seconds, s > 0 else { return nil }
         let minutes = Int((Double(s) / 60.0).rounded())
         return "\(max(1, minutes)) min"
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Lane Selection Copy (pure, testable)
+// ─────────────────────────────────────────────
+
+/// Stateless copy helpers for `ActiveMethodSelectionPanel`.
+/// Extracted so primary text and supporting text can be unit-tested
+/// without constructing a view.
+enum LaneSelectionCopy {
+
+    /// Main panel headline.
+    /// - Selected:   "{Lane} is your redirection method"
+    /// - Unselected: "select {Lane} as your redirection method"
+    static func primaryText(laneLabel: String, isSelected: Bool) -> String {
+        isSelected
+            ? "\(laneLabel) is your redirection method"
+            : "select \(laneLabel) as your redirection method"
+    }
+
+    /// One-line supporting description. Changes when the visible lane changes.
+    /// Unknown slugs fall back to a neutral line.
+    static func supportingText(slug: String) -> String {
+        switch slug {
+        case "watch":     return "video-shaped rabbit holes and longer watches worth returning to."
+        case "read":      return "articles, essays, and text trails."
+        case "mini-game": return "a short puzzle to reset your attention."
+        case "reflect":   return "one question and a quiet place to write."
+        case "deep-dive": return "active threads that can keep unfolding."
+        default:          return "a method worth returning to."
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Active Method Selection Panel
+// ─────────────────────────────────────────────
+
+/// Panel below the card deck that lets the user commit the visible lane as
+/// their active redirect method.
+///
+/// Behavior contract (RH2-A/B):
+/// - Browsing/swiping the deck updates `ritual` (the front card), which
+///   updates the panel copy. **No commit happens on swipe.**
+/// - Tapping the CTA calls `onSelect(slug)`, which writes to
+///   `ActiveMethodStore`. The card flip and back-face rows are unaffected.
+/// - If the visible lane is already active, the panel shows a selected state
+///   and the CTA is non-interactive (selection is already committed).
+/// - No `continue this lane →` copy. No revival of the old yellow pill.
+struct ActiveMethodSelectionPanel: View {
+    /// The ritual currently showing as the front card in the deck.
+    let ritual: RedirectRitual?
+    /// The slug currently stored in `ActiveMethodStore`. Optional — nil when
+    /// no method has been committed yet.
+    let activeSlug: String?
+    /// Called when the user taps the CTA. Receives the visible lane's slug.
+    let onSelect: (String) -> Void
+
+    private var slug: String   { ritual?.id    ?? "" }
+    private var label: String  { ritual?.label ?? "" }
+    private var isSelected: Bool {
+        !slug.isEmpty && activeSlug == slug
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+
+            HStack(alignment: .top, spacing: 10) {
+
+                // Primary headline — switches copy on lane change and on
+                // selection. id+transition gives a clean cross-fade.
+                Text(LaneSelectionCopy.primaryText(laneLabel: label, isSelected: isSelected))
+                    .font(.custom("InstrumentSerif-Italic", size: 17))
+                    .foregroundColor(DSColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .id("\(slug)-\(isSelected)")
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+
+                Spacer(minLength: 8)
+
+                // CTA — quiet paper capsule (unselected) or teal-tinted
+                // "set" indicator (selected). Old yellow "choose this" is
+                // intentionally retired; no replacement yellow pill.
+                if isSelected {
+                    HStack(spacing: 5) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("set")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundColor(DSColor.ink.opacity(0.65))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background {
+                        Capsule()
+                            .fill(Color(hex: "#E4EEEA"))
+                            .overlay {
+                                Capsule()
+                                    .stroke(DSColor.ink.opacity(0.30), lineWidth: 1)
+                            }
+                            .shadow(color: DSColor.ink.opacity(0.10),
+                                    radius: 0, x: 1, y: 1)
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                } else {
+                    Button {
+                        guard !slug.isEmpty else { return }
+                        onSelect(slug)
+                    } label: {
+                        Text("select")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(DSColor.ink.opacity(0.75))
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 7)
+                            .background {
+                                Capsule()
+                                    .fill(DSColor.paperCream)
+                                    .overlay {
+                                        Capsule()
+                                            .stroke(DSColor.ink.opacity(0.38), lineWidth: 1)
+                                    }
+                                    .shadow(color: DSColor.ink.opacity(0.14),
+                                            radius: 0, x: 1.5, y: 1.5)
+                            }
+                    }
+                    .buttonStyle(PaperCircleButtonStyle())
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
+            }
+
+            // Supporting copy — changes per visible lane.
+            Text(LaneSelectionCopy.supportingText(slug: slug))
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(DSColor.inkSoft.opacity(0.52))
+                .fixedSize(horizontal: false, vertical: true)
+                .id(slug)
+                .transition(.opacity)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color(hex: "#FFFDF2").opacity(0.60))
+                }
+        }
+        .inkCard(cornerRadius: 18)
+        .animation(.smooth, value: slug)
+        .animation(.smooth, value: isSelected)
     }
 }
 

@@ -3,16 +3,18 @@ import Observation
 
 /// Single source of truth for the currently active redirect method.
 ///
-/// Single-active-method rule:
-/// - Timer is the **sole writer**. When the user toggles a method ON in
-///   `MethodSelector`, the store's `activeRedirectMethodSlug` is set to that
-///   method's slug. The most recently toggled-on method is "active".
-/// - When the user toggles OFF the method that is currently active, the slug
-///   is cleared to `nil`. Other methods that remain selected do not promote
-///   to active automatically — the user must toggle one ON to re-anchor.
-/// - re:tuals and `WhenTimerEndsCard` are **read-only** consumers. re:tuals
-///   may use the slug to highlight or scroll-to the active lane; it must not
-///   write back to this store.
+/// Write paths (two, as of RH2-A/B):
+/// 1. **Timer** — `MethodSelector` sets the slug when the user toggles a
+///    method ON. The most recently toggled-on method is "active". Toggling
+///    OFF the currently active method clears the slug to `nil`; other
+///    selected methods do not auto-promote.
+/// 2. **re:tuals active-method selection panel** — the panel CTA below the
+///    card deck sets the slug to the currently visible lane's slug. This
+///    is an intentional write path added in RH2-A/B; it replaces the old
+///    prototype "choose this" card CTA. re:tuals cards and back-face rows
+///    remain **read-only**; only the panel CTA may write.
+///
+/// Read-only consumers: `WhenTimerEndsCard`, `DeckPagination` (accent dot).
 ///
 /// Storage:
 /// - In-memory only for v1. The slug resets on cold launch. Persistence is
