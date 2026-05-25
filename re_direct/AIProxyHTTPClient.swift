@@ -93,16 +93,33 @@ struct AIProxyHTTPClient: Sendable {
     /// the device. Adding to this list requires updating
     /// `docs/AI_INTEGRATION_PLAN.md §4`.
     static func encodeBody(_ request: AIRecommendationRequest) throws -> Data {
+        // Single-pass struct destructure into Swift-native locals **before**
+        // any `[String: Any]` dictionary literal is built. On physical
+        // devices we observed an EXC_BAD_ACCESS at `request.mood` when the
+        // optional was read after the dictionary literal had already
+        // bridged the preceding fields to NSObject — the implicit Swift→ObjC
+        // bridging at the literal site appears to leave the struct's
+        // Optional payload pointer in an invalid state. Reading every field
+        // first, in one block, avoids that codegen pattern entirely.
+        let interests              = request.interests
+        let mood                   = request.mood
+        let timeAvailableMinutes   = request.timeAvailableMinutes
+        let excludePromptHashes    = request.excludePromptHashes
+        let providerPreferenceRaw  = request.providerPreference.rawValue
+        let locale                 = request.locale
+
+        // Build the allowlisted JSON object from locals only. The struct
+        // is never re-accessed past this point.
         var json: [String: Any] = [
-            "interests": request.interests,
-            "time_available_minutes": request.timeAvailableMinutes,
-            "exclude_prompt_hashes": request.excludePromptHashes,
-            "provider_preference": request.providerPreference.rawValue,
-            "locale": request.locale,
+            "interests": interests,
+            "time_available_minutes": timeAvailableMinutes,
+            "exclude_prompt_hashes": excludePromptHashes,
+            "provider_preference": providerPreferenceRaw,
+            "locale": locale,
         ]
         // Mood is optional on the request; omit the key entirely when nil.
         // This mirrors the previous `encodeIfPresent` Codable behavior.
-        if let mood = request.mood {
+        if let mood {
             json["mood"] = mood
         }
 
