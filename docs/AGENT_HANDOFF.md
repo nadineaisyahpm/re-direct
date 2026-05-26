@@ -150,7 +150,9 @@ Hard rules:
 - Do **not** push unless explicitly instructed.
 - `git status --short` before any work.
 - Don't stage unrelated files. `.kiro/` is ignored and stays unstaged.
-- **Known persistent drift**: `re_direct.xcodeproj/project.pbxproj` carries personal signing values (`DEVELOPMENT_TEAM = F9BT3PQ9Z6`, `CODE_SIGN_IDENTITY[sdk=macosx*] = "Apple Development"`). Leave it unstaged on every slice unless the user explicitly opts to commit it.
+- **Known persistent drift** (two files, both leave unstaged on every slice unless the user explicitly opts to commit them):
+  - `re_direct.xcodeproj/project.pbxproj` — personal signing drift (`DEVELOPMENT_TEAM = F9BT3PQ9Z6`, `CODE_SIGN_IDENTITY[sdk=macosx*] = "Apple Development"`).
+  - `re_direct.xcodeproj/xcshareddata/xcschemes/re_direct.xcscheme` — local debug-diagnostics drift from physical-device testing (e.g. `disableMainThreadChecker = "YES"`, `LastUpgradeVersion`/`version` toggles between Xcode runs). Cosmetic to the repo, useful per-developer; do not stage unless explicitly asked.
 - Build/test after code changes.
 - Simulator verification often needs a manual tap from the user — automated osascript clicks miss the small bottom-nav icons.
 
@@ -176,7 +178,7 @@ Hard rules:
 - Overbuild `TimerView` as a generic countdown timer.
 - Delete `TimerSession` or treat Timer as dead — it's parked, not removed.
 - Resume Phase 7 (DeviceActivity / FamilyControls) without explicit user direction and the `docs/DEVICE_ACTIVITY_FEASIBILITY.md §10` workflow guardrails.
-- Stage the `re_direct.xcodeproj/project.pbxproj` signing drift unless asked.
+- Stage either of the two known Xcode local drifts unless asked: `re_direct.xcodeproj/project.pbxproj` (signing) or `re_direct.xcodeproj/xcshareddata/xcschemes/re_direct.xcscheme` (debug diagnostics).
 
 ## Likely next slices (proposed, not started)
 
@@ -189,7 +191,7 @@ Hard rules:
 
 ## First task in next chat
 
-1. Run `git status --short`. Confirm only the known `re_direct.xcodeproj/project.pbxproj` signing drift is unstaged (if present); no other working-tree changes expected. Confirm `origin/main` is in sync.
+1. Run `git status --short`. Confirm only the known Xcode local drifts are unstaged (if present): `re_direct.xcodeproj/project.pbxproj` (signing) and/or `re_direct.xcodeproj/xcshareddata/xcschemes/re_direct.xcscheme` (debug diagnostics). No other working-tree changes expected. Confirm `origin/main` is in sync.
 2. Read the docs listed under **Read first**, especially `docs/AI_INTEGRATION_PLAN.md`, `docs/REFLECTION_ARCHITECTURE.md`, and this file.
 3. Default next action: **propose RH1** — `RabbitHoleThread` SwiftData model + enums + ordering mechanism + tests, per `docs/RABBIT_HOLE_THREADS.md §11`. Do not start coding until the user approves the slice scope.
 4. Stop and ask if the user redirects to something else (e.g. Slice 7.1, a polish pass, or resuming Phase 7).
