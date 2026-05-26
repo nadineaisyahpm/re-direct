@@ -50,9 +50,11 @@ struct RabbitHoleView: View {
     ) private var looseEnds: [CuriosityEngagement]
 
     @Environment(ActiveMethodStore.self) private var activeMethodStore
+    @Environment(\.modelContext) private var modelContext
 
     @State private var revealed: Bool = false
     @State private var selectedThread: RabbitHoleThread? = nil
+    @State private var showCreateSheet: Bool = false
 
     // MARK: Derived view state
 
@@ -100,10 +102,10 @@ struct RabbitHoleView: View {
                             .offset(y: revealed ? 0 : 10)
                             .animation(.smooth.delay(0.05), value: revealed)
 
-                        // + new thread capsule (inert in RH3-C)
+                        // + new thread capsule — opens the creation sheet.
                         HStack {
                             Spacer()
-                            NewThreadCapsuleStub()
+                            NewThreadCapsule { showCreateSheet = true }
                         }
                         .padding(.horizontal, 24)
                         .padding(.bottom, 18)
@@ -133,6 +135,9 @@ struct RabbitHoleView: View {
             .sheet(item: $selectedThread) { thread in
                 ThreadPreviewSheet(thread: thread)
             }
+            .sheet(isPresented: $showCreateSheet) {
+                NewRabbitHoleThreadSheet()
+            }
         }
         .preferredColorScheme(.light)
     }
@@ -142,7 +147,7 @@ struct RabbitHoleView: View {
     private var emptyInvitation: some View {
         VStack {
             Spacer(minLength: 24)
-            EmptyStateBlock()
+            EmptyStateBlock { showCreateSheet = true }
             Spacer(minLength: 0)
         }
         .opacity(revealed ? 1 : 0)
@@ -746,16 +751,16 @@ struct EngagementPreviewRowModel: Equatable, Sendable {
 }
 
 // ─────────────────────────────────────────────
-// MARK: - + new thread capsule (stub)
+// MARK: - + new thread capsule
 // ─────────────────────────────────────────────
 
-/// Visual twin of `ReLogView`'s "log a rabbit hole" capsule. Inert in
-/// RH3-B/C; wired in RH3-D when thread creation ships.
-private struct NewThreadCapsuleStub: View {
+/// Visual twin of `ReLogView`'s "log a rabbit hole" capsule. Wired in
+/// RH3-D to present `NewRabbitHoleThreadSheet`.
+private struct NewThreadCapsule: View {
+    let onTap: () -> Void
+
     var body: some View {
-        Button {
-            // Intentionally empty. RH3-D wires the creation flow.
-        } label: {
+        Button(action: onTap) {
             HStack(spacing: 6) {
                 Image(systemName: "plus")
                     .font(.system(size: 12, weight: .regular))
@@ -782,7 +787,6 @@ private struct NewThreadCapsuleStub: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("New thread")
-        .accessibilityHint("Coming soon")
     }
 }
 
@@ -791,6 +795,8 @@ private struct NewThreadCapsuleStub: View {
 // ─────────────────────────────────────────────
 
 private struct EmptyStateBlock: View {
+    let onCTA: () -> Void
+
     var body: some View {
         VStack(spacing: 14) {
             ZStack {
@@ -822,9 +828,7 @@ private struct EmptyStateBlock: View {
                 .frame(maxWidth: 260)
                 .padding(.top, 2)
 
-            Button {
-                // Intentionally empty. Wired in RH3-D.
-            } label: {
+            Button(action: onCTA) {
                 Text(RabbitHoleEmptyCopy.cta)
                     .font(.custom("InstrumentSerif-Italic", size: 14))
                     .foregroundColor(DSColor.ink.opacity(0.85))
@@ -847,7 +851,7 @@ private struct EmptyStateBlock: View {
             }
             .buttonStyle(.plain)
             .padding(.top, 6)
-            .accessibilityHint("Coming soon")
+            .accessibilityLabel(RabbitHoleEmptyCopy.cta)
         }
         .padding(.horizontal, 28)
         .padding(.top, 40)
@@ -919,6 +923,245 @@ enum RabbitHoleEmptyCopy {
     static let sub           = "a thread starts with a rabbit hole you've already logged."
     static let cta           = "start your first thread"
     static let looseCaption  = "these could become threads."
+}
+
+// ─────────────────────────────────────────────
+// MARK: - New thread input validator (pure)
+// ─────────────────────────────────────────────
+
+/// Pure sanitize / validate helpers for the create-thread sheet.
+/// Trims leading/trailing whitespace and newlines; an all-whitespace
+/// title is invalid. Summary follows the same trim rule but is optional.
+enum NewThreadInputValidator {
+
+    /// Returns the trimmed title, or `nil` when the result is empty.
+    /// Callers should treat `nil` as "do not save."
+    static func sanitizedTitle(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Returns the trimmed summary, or `nil` when the result is empty.
+    /// Optional field — an empty summary saves cleanly as nil on the
+    /// thread, matching the model's default.
+    static func sanitizedSummary(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Convenience for the save button's `disabled` binding — true iff a
+    /// non-empty title would survive sanitization.
+    static func isValidTitle(_ raw: String) -> Bool {
+        sanitizedTitle(raw) != nil
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - New thread inserter (pure side-effect helper)
+// ─────────────────────────────────────────────
+
+/// Pure data-side helper for inserting a new `RabbitHoleThread` from
+/// the create-thread sheet's inputs. Lifted out of the view so we can
+/// unit-test that a save:
+/// - Creates exactly one thread row.
+/// - Sets status / sourceKind / timestamps to the documented defaults.
+/// - Attaches no engagements.
+/// - Rejects whitespace-only titles without inserting anything.
+enum NewThreadInserter {
+
+    /// Inserts a single `RabbitHoleThread` into `context` if `title`
+    /// sanitizes to non-empty. Returns the inserted thread, or `nil`
+    /// when the title was rejected (caller should keep the sheet open).
+    @discardableResult
+    static func insert(
+        title rawTitle: String,
+        summary rawSummary: String?,
+        into context: ModelContext,
+        now: Date = Date()
+    ) -> RabbitHoleThread? {
+        guard let cleanTitle = NewThreadInputValidator.sanitizedTitle(rawTitle) else {
+            return nil
+        }
+        let thread = RabbitHoleThread()
+        thread.title = cleanTitle
+        thread.summary = (rawSummary).flatMap(NewThreadInputValidator.sanitizedSummary)
+        thread.statusRaw = ThreadStatus.open.rawValue
+        thread.sourceRaw = ThreadSourceKind.manual.rawValue
+        thread.createdAt = now
+        thread.updatedAt = now
+        // Stamp lastEngagedAt at creation so a fresh thread sorts to the
+        // top of the @Query (which orders by lastEngagedAt desc).
+        // Future engagement inserts will overwrite this with the
+        // engagement's engagedAt; the field is sort-stability, not
+        // engagement history.
+        thread.lastEngagedAt = now
+        thread.deletedAt = nil
+        // No engagements attached in RH3-D — that's RH3-E (loose-end
+        // attach) and any future seed-from-existing flow.
+        context.insert(thread)
+        try? context.save()
+        return thread
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - New Rabbit Hole Thread Sheet
+// ─────────────────────────────────────────────
+
+/// Bottom sheet that creates a single `RabbitHoleThread` from a title
+/// (required) and an optional short summary. Presented from both the
+/// top-right `+ new thread` capsule and the empty-state CTA.
+///
+/// Behavior contract (RH3-D):
+/// - Save is disabled while the title sanitizes to empty.
+/// - Tapping save writes exactly one thread, dismisses, and the
+///   overview picks it up via the existing `@Query`.
+/// - Tapping cancel or dragging to dismiss writes nothing.
+/// - No engagements are created or attached in this slice.
+struct NewRabbitHoleThreadSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var titleInput: String = ""
+    @State private var summaryInput: String = ""
+    @FocusState private var titleFocused: Bool
+
+    private var isValid: Bool {
+        NewThreadInputValidator.isValidTitle(titleInput)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            // Header: cancel · title · save
+            HStack(alignment: .center) {
+                Button("cancel") { dismiss() }
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundColor(DSColor.inkSoft.opacity(0.65))
+                    .buttonStyle(.plain)
+
+                Spacer()
+
+                Text("new thread")
+                    .font(.custom("InstrumentSerif-Italic", size: 17))
+                    .foregroundColor(DSColor.ink)
+
+                Spacer()
+
+                Button(action: save) {
+                    Text("save")
+                        .font(.custom("InstrumentSerif-Italic", size: 15))
+                        .foregroundColor(isValid
+                                         ? DSColor.ink
+                                         : DSColor.ink.opacity(0.30))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background {
+                            Capsule()
+                                .fill(isValid
+                                      ? DSColor.paperCream
+                                      : DSColor.paperCream.opacity(0.55))
+                                .overlay {
+                                    Capsule()
+                                        .stroke(DSColor.ink.opacity(isValid ? 0.30 : 0.15),
+                                                lineWidth: 1)
+                                }
+                                .shadow(color: DSColor.ink.opacity(isValid ? 0.10 : 0),
+                                        radius: 0, x: 1, y: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .disabled(!isValid)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+            .padding(.bottom, 18)
+
+            Rectangle()
+                .fill(DSColor.ink.opacity(0.10))
+                .frame(height: 0.5)
+
+            // Form fields
+            VStack(alignment: .leading, spacing: 18) {
+
+                fieldGroup(label: "title") {
+                    TextField("what's this thread about?", text: $titleInput)
+                        .font(.custom("InstrumentSerif-Italic", size: 17))
+                        .foregroundColor(DSColor.ink)
+                        .focused($titleFocused)
+                        .submitLabel(.next)
+                        .onSubmit { if isValid { save() } }
+                }
+
+                fieldGroup(label: "summary  ·  optional") {
+                    TextField(
+                        "one line about the arc — what you're curious about",
+                        text: $summaryInput,
+                        axis: .vertical
+                    )
+                    .font(.system(size: 14))
+                    .foregroundColor(DSColor.ink.opacity(0.78))
+                    .lineLimit(2...4)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+
+            Spacer(minLength: 0)
+        }
+        .background {
+            PaperBackground(variant: .warm).ignoresSafeArea()
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            // Brief delay so the sheet finishes its presentation before
+            // the keyboard pops up — feels less jumpy on device.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                titleFocused = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func fieldGroup<Content: View>(
+        label: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.custom("InstrumentSerif-Italic", size: 12))
+                .foregroundColor(DSColor.inkSoft.opacity(0.55))
+
+            content()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(DSColor.paperCream)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
+                        }
+                        .shadow(color: DSColor.ink.opacity(0.08),
+                                radius: 0, x: 1, y: 1)
+                }
+        }
+    }
+
+    private func save() {
+        let inserted = NewThreadInserter.insert(
+            title: titleInput,
+            summary: summaryInput,
+            into: modelContext
+        )
+        if inserted != nil {
+            dismiss()
+        }
+        // If `inserted == nil`, the title was whitespace-only and the
+        // save button shouldn't have been tappable. Keep the sheet open
+        // as a safety net rather than silently dismissing.
+    }
 }
 
 // ─────────────────────────────────────────────

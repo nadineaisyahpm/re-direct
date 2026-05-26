@@ -5,7 +5,7 @@ import SwiftData
 @testable import re_direct
 
 @MainActor
-@Suite("RabbitHoleView (RH3-B + RH3-C)")
+@Suite("RabbitHoleView (RH3-B + RH3-C + RH3-D)")
 struct RabbitHoleViewTests {
 
     private func makeContext() throws -> ModelContext {
@@ -401,5 +401,203 @@ struct RabbitHoleViewTests {
         let copy = ThreadPreviewSheet.overflowFootnote(shown: 25, total: 73)
         #expect(copy.contains("25"))
         #expect(copy.contains("73"))
+    }
+
+    // ─────────────────────────────────────────
+    // MARK: RH3-D: Input validator
+    // ─────────────────────────────────────────
+
+    @Test("Empty title sanitizes to nil")
+    func validatorEmptyTitleNil() {
+        #expect(NewThreadInputValidator.sanitizedTitle("") == nil)
+    }
+
+    @Test("Whitespace-only title sanitizes to nil")
+    func validatorWhitespaceTitleNil() {
+        #expect(NewThreadInputValidator.sanitizedTitle("   ") == nil)
+        #expect(NewThreadInputValidator.sanitizedTitle("\t\n\n") == nil)
+        #expect(NewThreadInputValidator.sanitizedTitle("  \r\n  ") == nil)
+    }
+
+    @Test("Title with content survives sanitization, trimmed on both sides")
+    func validatorTitleTrims() {
+        #expect(NewThreadInputValidator.sanitizedTitle("Bioluminescence") == "Bioluminescence")
+        #expect(NewThreadInputValidator.sanitizedTitle("   leading spaces") == "leading spaces")
+        #expect(NewThreadInputValidator.sanitizedTitle("trailing spaces   ") == "trailing spaces")
+        #expect(NewThreadInputValidator.sanitizedTitle("  both  sides  ") == "both  sides")
+    }
+
+    @Test("isValidTitle mirrors sanitizedTitle non-nil")
+    func validatorIsValidMatchesSanitize() {
+        #expect(!NewThreadInputValidator.isValidTitle(""))
+        #expect(!NewThreadInputValidator.isValidTitle("   "))
+        #expect(NewThreadInputValidator.isValidTitle("x"))
+        #expect(NewThreadInputValidator.isValidTitle("  x  "))
+    }
+
+    @Test("Empty summary sanitizes to nil")
+    func validatorEmptySummaryNil() {
+        #expect(NewThreadInputValidator.sanitizedSummary("") == nil)
+        #expect(NewThreadInputValidator.sanitizedSummary("   ") == nil)
+    }
+
+    @Test("Summary trims both sides")
+    func validatorSummaryTrims() {
+        #expect(NewThreadInputValidator.sanitizedSummary("a short summary") == "a short summary")
+        #expect(NewThreadInputValidator.sanitizedSummary("  trimmed  ") == "trimmed")
+    }
+
+    // ─────────────────────────────────────────
+    // MARK: RH3-D: Inserter
+    // ─────────────────────────────────────────
+
+    @Test("Insert with valid title creates exactly one thread")
+    func inserterCreatesOneThread() throws {
+        let context = try makeContext()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let result = NewThreadInserter.insert(
+            title: "Deep-sea bioluminescence",
+            summary: nil,
+            into: context,
+            now: now
+        )
+        try context.save()
+
+        #expect(result != nil)
+        let count = try context.fetchCount(FetchDescriptor<RabbitHoleThread>())
+        #expect(count == 1)
+    }
+
+    @Test("Insert sets defaults: status open, sourceKind manual, timestamps")
+    func inserterSetsDefaults() throws {
+        let context = try makeContext()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let thread = try #require(
+            NewThreadInserter.insert(
+                title: "x",
+                summary: nil,
+                into: context,
+                now: now
+            )
+        )
+
+        #expect(thread.status == .open)
+        #expect(thread.source == .manual)
+        #expect(thread.statusRaw == "open")
+        #expect(thread.sourceRaw == "manual")
+        #expect(thread.createdAt == now)
+        #expect(thread.updatedAt == now)
+        #expect(thread.lastEngagedAt == now)
+        #expect(thread.deletedAt == nil)
+    }
+
+    @Test("Insert trims title and writes the trimmed value")
+    func inserterTrimsTitle() throws {
+        let context = try makeContext()
+        let thread = try #require(
+            NewThreadInserter.insert(
+                title: "   Whales and falls   ",
+                summary: nil,
+                into: context
+            )
+        )
+        #expect(thread.title == "Whales and falls")
+    }
+
+    @Test("Insert with nil summary leaves summary nil")
+    func inserterNilSummary() throws {
+        let context = try makeContext()
+        let thread = try #require(
+            NewThreadInserter.insert(
+                title: "x",
+                summary: nil,
+                into: context
+            )
+        )
+        #expect(thread.summary == nil)
+    }
+
+    @Test("Insert with empty / whitespace summary stores nil")
+    func inserterEmptySummaryBecomesNil() throws {
+        let context = try makeContext()
+        let thread = try #require(
+            NewThreadInserter.insert(
+                title: "x",
+                summary: "    ",
+                into: context
+            )
+        )
+        #expect(thread.summary == nil)
+    }
+
+    @Test("Insert with non-empty summary stores trimmed value")
+    func inserterSummaryTrimmed() throws {
+        let context = try makeContext()
+        let thread = try #require(
+            NewThreadInserter.insert(
+                title: "x",
+                summary: "  a real summary  ",
+                into: context
+            )
+        )
+        #expect(thread.summary == "a real summary")
+    }
+
+    @Test("Insert with whitespace-only title returns nil and creates nothing")
+    func inserterRejectsBlankTitle() throws {
+        let context = try makeContext()
+
+        let result = NewThreadInserter.insert(
+            title: "    ",
+            summary: "should not save",
+            into: context
+        )
+        try context.save()
+
+        #expect(result == nil)
+        let count = try context.fetchCount(FetchDescriptor<RabbitHoleThread>())
+        #expect(count == 0)
+    }
+
+    @Test("Insert does not create or attach any engagements")
+    func inserterCreatesNoEngagements() throws {
+        let context = try makeContext()
+
+        let thread = try #require(
+            NewThreadInserter.insert(
+                title: "x",
+                summary: nil,
+                into: context
+            )
+        )
+        try context.save()
+
+        // No engagements created.
+        let engagementCount = try context.fetchCount(FetchDescriptor<CuriosityEngagement>())
+        #expect(engagementCount == 0)
+
+        // None attached to the new thread.
+        #expect(thread.engagements.isEmpty)
+    }
+
+    @Test("Cancel path: not calling insert leaves the store empty")
+    func cancelPathWritesNothing() throws {
+        let context = try makeContext()
+
+        // Simulate the cancel path — user types but never calls save.
+        // No code path runs against `context`, so nothing should land.
+        let title = "draft title that gets cancelled"
+        let summary = "draft summary that gets cancelled"
+        _ = title
+        _ = summary
+
+        try context.save()
+
+        let threadCount = try context.fetchCount(FetchDescriptor<RabbitHoleThread>())
+        let engagementCount = try context.fetchCount(FetchDescriptor<CuriosityEngagement>())
+        #expect(threadCount == 0)
+        #expect(engagementCount == 0)
     }
 }
