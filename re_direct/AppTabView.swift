@@ -11,7 +11,7 @@ struct AppTabView: View {
                 .tag(0)
                 .toolbar(.hidden, for: .tabBar)
 
-            TimerView()
+            RabbitHoleView()
                 .tag(1)
                 .toolbar(.hidden, for: .tabBar)
 
@@ -45,13 +45,17 @@ struct SharedNavBar: View {
 
     @State private var indicatorIsSettling = false
 
-    private let tabs: [(icon: String, label: String)] = [
-        ("leaf.fill",         "home"),
-        ("clock.fill",        "timer"),
-        ("hourglass",         "usage"),
-        ("waveform.path.ecg", "re:log"),
-        ("gearshape.fill",    "settings")
+    /// Canonical tab configuration. `internal` (default) so tests can pin
+    /// the array exactly; not part of any cross-module public API.
+    static let tabs: [(icon: String, label: String)] = [
+        ("leaf.fill",              "home"),
+        ("arrow.turn.down.right",  "rabbit hole"),
+        ("hourglass",              "usage"),
+        ("waveform.path.ecg",      "re:log"),
+        ("gearshape.fill",         "settings")
     ]
+
+    private var tabs: [(icon: String, label: String)] { Self.tabs }
 
     var body: some View {
         GeometryReader { geo in

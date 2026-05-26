@@ -45,7 +45,8 @@ DeviceActivity / FamilyControls is **parked for v2** (not abandoned). Family Con
 - **Dashboard** discovers curiosity and now displays an **AI-backed Daily Direct** when fresh cache or proxy returns a recommendation. Falls back silently to seeded curiosity content when AI is unavailable.
 - **re:tuals** remembers per-method ritual history (read-only). Card front carries editorial copy; tapping flips to engagement history for the lane.
 - **Re:Log** summarizes — rabbit holes, reflections (read-only floating popup), boundary sessions.
-- **Timer/Boundary** exists but is **not the v1 core**. It commits a `TimerSession` boundary row; usage tracking / shielding is parked with Phase 7B.
+- **Rabbit Hole** (tab 1, as of RH3-B) is where the user picks up where they left off. The RH3-B shell ships an editorial title, an inert `+ new thread` capsule, and the "no threads yet." empty state. RH3-C wires the today card, threads list, loose-ends section, and `ThreadPreviewSheet`.
+- **Timer/Boundary** is **parked for v2.** As of RH3-B it is no longer reachable from the tab bar — tab 1 holds `RabbitHoleView`. The `TimerView` source and `TimerSession` model remain in the codebase for Phase 7B / 7C unparking. No primary v1 surface presents the Timer flow; Settings exposure for `TimerView` is deferred (likely to a later slice once thread surfaces stabilize).
 - **Settings** is the local status dossier + S3 data-clearing controls (soft-delete with confirmation).
 
 ## Semantic rules — never cross these
@@ -156,6 +157,7 @@ Hard rules:
 ## Protected root view initializers
 
 - `DashboardView()`
+- `RabbitHoleView()`
 - `TimerView()`
 - `RetualsView()`
 - `ReLogView()`

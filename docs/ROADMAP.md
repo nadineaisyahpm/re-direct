@@ -33,11 +33,19 @@ The four primary screens each own one verb. Blurring them creates the kind of ov
 
 Does **not** own: session telemetry, per-method history, aggregate analytics.
 
-### Timer — *commits*
+### Rabbit Hole — *continues* (tab 1, as of RH3-B)
 
-- Picks a **redirect method category** (one of the 5: `watch`, `read`, `mini-game`, `reflect`, `deep-dive`) for the upcoming boundary session.
-- Picks duration, theme, tracked apps.
-- The preview/start affordance creates a `TimerSession` row representing the boundary commitment.
+- Surfaces the user's open curiosity threads so they can pick up where they left off.
+- Owns the inert `+ new thread` capsule (wired in RH3-D).
+- RH3-B ships the shell + empty state only; RH3-C wires the today card, your-threads list, loose-ends section, and `ThreadPreviewSheet` against `RabbitHoleThread` + `CuriosityEngagement` queries. See `docs/RABBIT_HOLE_THREADS.md`.
+
+Does **not** own: picking a method (re:tuals), engagement archive (Re:Log), curiosity discovery (Dashboard), reflection writing (Reflect ritual).
+
+### Timer — *parked for v2*
+
+- No longer occupies the primary tab bar as of RH3-B; `RabbitHoleView` holds tab 1.
+- `TimerView` source and the `TimerSession` model **remain in the codebase and schema** for Phase 7B / 7C unparking. No deletion, no migration.
+- Historical responsibilities (picks a redirect method category, duration, theme, tracked apps; commits a `TimerSession` row) are preserved in the existing `TimerView` source for when Phase 7B resumes. Settings exposure for the parked surface is deferred — see `docs/AGENT_HANDOFF.md`.
 
 Does **not** own: picking specific content, logging engagement, visualizing past sessions.
 
