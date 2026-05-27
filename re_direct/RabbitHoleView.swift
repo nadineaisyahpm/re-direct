@@ -55,6 +55,7 @@ struct RabbitHoleView: View {
     @State private var revealed: Bool = false
     @State private var selectedThread: RabbitHoleThread? = nil
     @State private var showCreateSheet: Bool = false
+    @State private var attachingEngagement: CuriosityEngagement? = nil
 
     // MARK: Derived view state
 
@@ -138,6 +139,9 @@ struct RabbitHoleView: View {
             .sheet(isPresented: $showCreateSheet) {
                 NewRabbitHoleThreadSheet()
             }
+            .sheet(item: $attachingEngagement) { engagement in
+                AttachToThreadSheet(engagement: engagement)
+            }
         }
         .preferredColorScheme(.light)
     }
@@ -171,7 +175,9 @@ struct RabbitHoleView: View {
                             .fill(DSColor.ink.opacity(0.08))
                             .frame(height: 0.5)
                     }
-                    LooseEndRow(engagement: engagement)
+                    LooseEndRow(engagement: engagement) {
+                        attachingEngagement = engagement
+                    }
                 }
             }
             .padding(.top, 4)
@@ -245,7 +251,9 @@ struct RabbitHoleView: View {
                                 .fill(DSColor.ink.opacity(0.08))
                                 .frame(height: 0.5)
                         }
-                        LooseEndRow(engagement: engagement)
+                        LooseEndRow(engagement: engagement) {
+                        attachingEngagement = engagement
+                    }
                     }
                 }
                 .padding(.top, 4)
@@ -510,6 +518,7 @@ private struct ThreadListRow: View {
 
 private struct LooseEndRow: View {
     let engagement: CuriosityEngagement
+    let onAttach: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -521,25 +530,26 @@ private struct LooseEndRow: View {
 
             Spacer(minLength: 8)
 
-            // Inert "thread?" pill — wired in RH3-E.
-            Text("thread?")
-                .font(.custom("InstrumentSerif-Italic", size: 10))
-                .foregroundColor(DSColor.ink.opacity(0.55))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background {
-                    Capsule()
-                        .fill(DSColor.highlightYellowSoft.opacity(0.55))
-                        .overlay {
-                            Capsule()
-                                .stroke(DSColor.ink.opacity(0.14), lineWidth: 0.5)
-                        }
-                }
-                .accessibilityHidden(true)
+            // "thread?" pill — opens the attach-to-thread sheet (RH3-E).
+            Button(action: onAttach) {
+                Text("thread?")
+                    .font(.custom("InstrumentSerif-Italic", size: 10))
+                    .foregroundColor(DSColor.ink.opacity(0.55))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background {
+                        Capsule()
+                            .fill(DSColor.highlightYellowSoft.opacity(0.55))
+                            .overlay {
+                                Capsule()
+                                    .stroke(DSColor.ink.opacity(0.14), lineWidth: 0.5)
+                            }
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add '\(engagement.contentTitle)' to a thread")
         }
         .padding(.vertical, 9)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Loose rabbit hole: \(engagement.contentTitle)")
     }
 }
 
@@ -1161,6 +1171,291 @@ struct NewRabbitHoleThreadSheet: View {
         // If `inserted == nil`, the title was whitespace-only and the
         // save button shouldn't have been tappable. Keep the sheet open
         // as a safety net rather than silently dismissing.
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Attachable threads picker (pure filter)
+// ─────────────────────────────────────────────
+
+/// Pure filter helper for the attach-to-thread picker. Mirrors the
+/// overview's `@Query` filter so the picker shows exactly the same set
+/// of threads that the user sees on the main surface.
+enum AttachableThreadsPicker {
+
+    /// Returns only the threads that can receive an engagement
+    /// attachment: not deleted, not closed.
+    static func attachable(from all: [RabbitHoleThread]) -> [RabbitHoleThread] {
+        all.filter { $0.deletedAt == nil && $0.status != .closed }
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Engagement thread attacher (pure side-effect helper)
+// ─────────────────────────────────────────────
+
+/// Pure data-side helper for attaching a loose `CuriosityEngagement`
+/// to an existing `RabbitHoleThread`. Lifted out of the view so we
+/// can unit-test the writes:
+/// - sets `engagement.thread = thread` (which also populates
+///   `thread.engagements` via the inverse relationship)
+/// - bumps `thread.lastEngagedAt` to `max(existing, engagement.engagedAt)`
+///   so sort order on the overview stays honest
+/// - stamps `thread.updatedAt = now`
+///
+/// Returns `true` on success, `false` if the engagement was already
+/// attached to this same thread (no-op short-circuit).
+enum EngagementThreadAttacher {
+
+    @discardableResult
+    static func attach(
+        engagement: CuriosityEngagement,
+        to thread: RabbitHoleThread,
+        context: ModelContext,
+        now: Date = Date()
+    ) -> Bool {
+        // Idempotent guard: already attached to this thread → no-op.
+        // Belt-and-suspenders since the sheet only renders for
+        // unthreaded engagements, but defensive against a future
+        // re-entry from a different surface.
+        if engagement.thread === thread { return false }
+
+        engagement.thread = thread
+
+        // Keep the thread's sort key honest. The engagement may have
+        // happened before the thread's most recent step; max() makes
+        // sure the thread doesn't accidentally regress in sort order.
+        let existing = thread.lastEngagedAt ?? .distantPast
+        thread.lastEngagedAt = max(existing, engagement.engagedAt)
+        thread.updatedAt = now
+
+        try? context.save()
+        return true
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Attach to Thread Sheet
+// ─────────────────────────────────────────────
+
+/// Bottom sheet that attaches a single loose `CuriosityEngagement` to
+/// an existing `RabbitHoleThread`. Presented by tapping a loose-end
+/// row's `thread?` pill.
+///
+/// Behavior contract (RH3-E):
+/// - Tap a thread row → attach + dismiss (single-step confirm; the
+///   loose-end pill is the deliberate gesture).
+/// - Cancel / drag-dismiss writes nothing.
+/// - No new-thread creation from this sheet; if the user has no
+///   threads, the sheet shows an informational empty state and they
+///   close it to use `+ new thread` on the overview.
+/// - Closed and deleted threads never appear (filtered by `@Query`
+///   and re-asserted by `AttachableThreadsPicker`).
+/// - Engagement context displayed: title only. **No reflection body,
+///   no method-slug-derived sensitive info, no notes.** Even though
+///   the engagement object is in scope, only the title is rendered.
+struct AttachToThreadSheet: View {
+    let engagement: CuriosityEngagement
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    /// Same filter as the overview's threads query — kept in sync so a
+    /// user sees the same set in both surfaces.
+    @Query(
+        filter: #Predicate<RabbitHoleThread> {
+            $0.deletedAt == nil && $0.statusRaw != "closed"
+        },
+        sort: \.lastEngagedAt,
+        order: .reverse
+    ) private var threads: [RabbitHoleThread]
+
+    /// Hard cap on rows rendered, matching the RH3-C engagement-list
+    /// cap. Realistic active-thread counts are well below this.
+    static let threadDisplayCap: Int = 25
+
+    private var visibleThreads: [RabbitHoleThread] {
+        Array(threads.prefix(Self.threadDisplayCap))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            // Header: leading cancel + true-centered title. No trailing
+            // action — confirm is the row tap, so the header explicitly
+            // has no right-side button rather than a placeholder slot.
+            ZStack {
+                Text("add to thread")
+                    .font(.custom("InstrumentSerif-Italic", size: 17))
+                    .foregroundColor(DSColor.ink)
+
+                HStack {
+                    Button("cancel") { dismiss() }
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(DSColor.inkSoft.opacity(0.65))
+                        .buttonStyle(.plain)
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
+            // Engagement context — title only.
+            VStack(alignment: .leading, spacing: 4) {
+                Text("adding")
+                    .font(.custom("InstrumentSerif-Italic", size: 11))
+                    .foregroundColor(DSColor.inkSoft.opacity(0.50))
+                Text(engagement.contentTitle)
+                    .font(.custom("InstrumentSerif-Italic", size: 16))
+                    .foregroundColor(DSColor.ink)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 14)
+
+            Rectangle()
+                .fill(DSColor.ink.opacity(0.10))
+                .frame(height: 0.5)
+
+            // Thread picker
+            if visibleThreads.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(visibleThreads.enumerated()), id: \.element.id) { idx, thread in
+                            if idx > 0 {
+                                Rectangle()
+                                    .fill(DSColor.ink.opacity(0.08))
+                                    .frame(height: 0.5)
+                                    .padding(.horizontal, 24)
+                            }
+                            AttachThreadRow(thread: thread) {
+                                attach(to: thread)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .background {
+            PaperBackground(variant: .warm).ignoresSafeArea()
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Spacer(minLength: 28)
+
+            Text("no threads to attach to.")
+                .font(.custom("InstrumentSerif-Italic", size: 17))
+                .foregroundColor(DSColor.ink.opacity(0.65))
+
+            Text("start one first with + new thread.")
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(DSColor.inkSoft.opacity(0.50))
+                .multilineTextAlignment(.center)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+    }
+
+    private func attach(to thread: RabbitHoleThread) {
+        let attached = EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: modelContext
+        )
+        if attached {
+            dismiss()
+        } else {
+            // Idempotent no-op (already on this thread). Dismiss anyway
+            // so the user doesn't get stuck.
+            dismiss()
+        }
+    }
+}
+
+/// Row in the attach-to-thread picker. Tap is the confirm gesture —
+/// no separate save step.
+private struct AttachThreadRow: View {
+    let thread: RabbitHoleThread
+    let onSelect: () -> Void
+
+    private var accentColor: Color {
+        switch thread.status {
+        case .open:     return Color(hex: "#1B4D4A").opacity(0.75)
+        case .resting:  return Color(hex: "#B8A8B0")
+        default:        return DSColor.ink.opacity(0.22)
+        }
+    }
+
+    private var displayTitle: String {
+        thread.title.isEmpty ? "untitled thread" : thread.title
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(accentColor)
+                    .frame(width: 2.5)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(displayTitle)
+                        .font(.custom("InstrumentSerif-Italic", size: 15))
+                        .foregroundColor(DSColor.ink)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+
+                    HStack(spacing: 6) {
+                        if thread.status == .resting {
+                            Text("resting")
+                                .font(.system(size: 10))
+                                .foregroundColor(DSColor.ink.opacity(0.60))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 1)
+                                .background {
+                                    Capsule()
+                                        .fill(Color(hex: "#B8A8B0").opacity(0.22))
+                                        .overlay {
+                                            Capsule()
+                                                .stroke(Color(hex: "#B8A8B0").opacity(0.50),
+                                                        lineWidth: 0.5)
+                                        }
+                                }
+                        }
+                        Text(ThreadStepCount.display(thread.engagements.count))
+                        Circle()
+                            .fill(DSColor.ink.opacity(0.22))
+                            .frame(width: 2, height: 2)
+                        Text(EngagementCaption.relativeDate(
+                            thread.lastEngagedAt ?? thread.createdAt
+                        ))
+                    }
+                    .font(.system(size: 10))
+                    .foregroundColor(DSColor.inkSoft.opacity(0.55))
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(DSColor.ink.opacity(0.35))
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Attach to \(displayTitle), \(ThreadStepCount.display(thread.engagements.count))")
     }
 }
 

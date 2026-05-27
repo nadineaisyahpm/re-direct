@@ -5,7 +5,7 @@ import SwiftData
 @testable import re_direct
 
 @MainActor
-@Suite("RabbitHoleView (RH3-B + RH3-C + RH3-D)")
+@Suite("RabbitHoleView (RH3-B + RH3-C + RH3-D + RH3-E)")
 struct RabbitHoleViewTests {
 
     private func makeContext() throws -> ModelContext {
@@ -599,5 +599,375 @@ struct RabbitHoleViewTests {
         let engagementCount = try context.fetchCount(FetchDescriptor<CuriosityEngagement>())
         #expect(threadCount == 0)
         #expect(engagementCount == 0)
+    }
+
+    // ─────────────────────────────────────────
+    // MARK: RH3-E: Attachable threads picker
+    // ─────────────────────────────────────────
+
+    @Test("Picker excludes closed threads")
+    func pickerExcludesClosed() throws {
+        let context = try makeContext()
+
+        let open = RabbitHoleThread()
+        open.title = "open"
+        open.statusRaw = ThreadStatus.open.rawValue
+        context.insert(open)
+
+        let resting = RabbitHoleThread()
+        resting.title = "resting"
+        resting.statusRaw = ThreadStatus.resting.rawValue
+        context.insert(resting)
+
+        let closed = RabbitHoleThread()
+        closed.title = "closed"
+        closed.statusRaw = ThreadStatus.closed.rawValue
+        context.insert(closed)
+
+        try context.save()
+
+        let all = try context.fetch(FetchDescriptor<RabbitHoleThread>())
+        let pickable = AttachableThreadsPicker.attachable(from: all)
+        let titles = Set(pickable.map(\.title))
+        #expect(titles == Set(["open", "resting"]))
+    }
+
+    @Test("Picker excludes deleted threads")
+    func pickerExcludesDeleted() throws {
+        let context = try makeContext()
+
+        let live = RabbitHoleThread()
+        live.title = "live"
+        live.statusRaw = ThreadStatus.open.rawValue
+        context.insert(live)
+
+        let gone = RabbitHoleThread()
+        gone.title = "tombstone"
+        gone.statusRaw = ThreadStatus.open.rawValue
+        gone.deletedAt = Date()
+        context.insert(gone)
+
+        try context.save()
+
+        let all = try context.fetch(FetchDescriptor<RabbitHoleThread>())
+        let pickable = AttachableThreadsPicker.attachable(from: all)
+        #expect(pickable.count == 1)
+        #expect(pickable.first?.title == "live")
+    }
+
+    @Test("Picker keeps both open and resting threads")
+    func pickerKeepsOpenAndResting() throws {
+        let context = try makeContext()
+
+        let a = RabbitHoleThread()
+        a.title = "a"
+        a.statusRaw = ThreadStatus.open.rawValue
+        context.insert(a)
+
+        let b = RabbitHoleThread()
+        b.title = "b"
+        b.statusRaw = ThreadStatus.resting.rawValue
+        context.insert(b)
+
+        try context.save()
+
+        let all = try context.fetch(FetchDescriptor<RabbitHoleThread>())
+        let pickable = AttachableThreadsPicker.attachable(from: all)
+        #expect(pickable.count == 2)
+    }
+
+    // ─────────────────────────────────────────
+    // MARK: RH3-E: Engagement thread attacher
+    // ─────────────────────────────────────────
+
+    @Test("Attach sets engagement.thread")
+    func attachSetsEngagementThread() throws {
+        let context = try makeContext()
+
+        let thread = RabbitHoleThread()
+        thread.title = "Bioluminescence"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        thread.lastEngagedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "deep-sea glow"
+        engagement.engagedAt = Date(timeIntervalSince1970: 1_700_500_000)
+        context.insert(engagement)
+        try context.save()
+
+        let didAttach = EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context
+        )
+        #expect(didAttach)
+        #expect(engagement.thread === thread)
+    }
+
+    @Test("Attach pushes thread.lastEngagedAt to max(existing, engagement.engagedAt)")
+    func attachAdvancesLastEngagedWhenEngagementIsNewer() throws {
+        let context = try makeContext()
+
+        let earlier = Date(timeIntervalSince1970: 1_700_000_000)
+        let later   = Date(timeIntervalSince1970: 1_700_500_000)
+
+        let thread = RabbitHoleThread()
+        thread.title = "Whales"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        thread.lastEngagedAt = earlier
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "whale falls"
+        engagement.engagedAt = later
+        context.insert(engagement)
+        try context.save()
+
+        EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context
+        )
+        #expect(thread.lastEngagedAt == later)
+    }
+
+    @Test("Attach does not regress thread.lastEngagedAt when engagement is older")
+    func attachDoesNotRegressLastEngaged() throws {
+        let context = try makeContext()
+
+        let earlier = Date(timeIntervalSince1970: 1_700_000_000)
+        let later   = Date(timeIntervalSince1970: 1_700_500_000)
+
+        let thread = RabbitHoleThread()
+        thread.title = "Whales"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        thread.lastEngagedAt = later   // thread is more recent
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "old reading"
+        engagement.engagedAt = earlier   // engagement is older
+        context.insert(engagement)
+        try context.save()
+
+        EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context
+        )
+        // Thread's lastEngagedAt should NOT regress.
+        #expect(thread.lastEngagedAt == later)
+    }
+
+    @Test("Attach handles a thread whose lastEngagedAt was nil")
+    func attachHandlesNilLastEngaged() throws {
+        let context = try makeContext()
+
+        let engagedAt = Date(timeIntervalSince1970: 1_700_500_000)
+
+        let thread = RabbitHoleThread()
+        thread.title = "fresh thread"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        thread.lastEngagedAt = nil
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "first attachment"
+        engagement.engagedAt = engagedAt
+        context.insert(engagement)
+        try context.save()
+
+        EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context
+        )
+        #expect(thread.lastEngagedAt == engagedAt)
+    }
+
+    @Test("Attach stamps thread.updatedAt to now")
+    func attachStampsUpdatedAt() throws {
+        let context = try makeContext()
+
+        let now = Date(timeIntervalSince1970: 1_701_000_000)
+
+        let thread = RabbitHoleThread()
+        thread.title = "x"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        thread.updatedAt = Date(timeIntervalSince1970: 1_700_000_000) // older
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "y"
+        context.insert(engagement)
+        try context.save()
+
+        EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context,
+            now: now
+        )
+        #expect(thread.updatedAt == now)
+    }
+
+    @Test("Attach is idempotent: re-attaching to the same thread returns false and writes nothing new")
+    func attachIdempotent() throws {
+        let context = try makeContext()
+
+        let thread = RabbitHoleThread()
+        thread.title = "x"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        thread.lastEngagedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "y"
+        engagement.engagedAt = Date(timeIntervalSince1970: 1_700_500_000)
+        context.insert(engagement)
+        try context.save()
+
+        let first = EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context
+        )
+        #expect(first)
+
+        let stampedAfterFirst = thread.updatedAt
+
+        let second = EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context
+        )
+        #expect(!second)
+        // updatedAt did not change on the no-op call.
+        #expect(thread.updatedAt == stampedAfterFirst)
+    }
+
+    @Test("After attach, engagement disappears from loose-end query results")
+    func afterAttachEngagementLeavesLooseEnds() throws {
+        let context = try makeContext()
+
+        let thread = RabbitHoleThread()
+        thread.title = "x"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "now-attached"
+        context.insert(engagement)
+        try context.save()
+
+        // Pre-attach: appears as a loose end.
+        let pre = try context.fetch(
+            FetchDescriptor<CuriosityEngagement>(
+                predicate: #Predicate { $0.deletedAt == nil && $0.thread == nil }
+            )
+        )
+        #expect(pre.count == 1)
+
+        EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context
+        )
+
+        // Post-attach: no longer a loose end.
+        let post = try context.fetch(
+            FetchDescriptor<CuriosityEngagement>(
+                predicate: #Predicate { $0.deletedAt == nil && $0.thread == nil }
+            )
+        )
+        #expect(post.isEmpty)
+
+        // And the thread now owns it via the inverse relationship.
+        #expect(thread.engagements.count == 1)
+        #expect(thread.engagements.first === engagement)
+    }
+
+    @Test("Cancel path: not calling attach leaves engagement loose")
+    func attachCancelPathWritesNothing() throws {
+        let context = try makeContext()
+
+        let thread = RabbitHoleThread()
+        thread.title = "x"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "still loose"
+        context.insert(engagement)
+        try context.save()
+
+        // Simulate cancel: never call attach. Engagement remains
+        // unthreaded; thread's engagements stays empty.
+        try context.save()
+
+        #expect(engagement.thread == nil)
+        #expect(thread.engagements.isEmpty)
+
+        let loose = try context.fetch(
+            FetchDescriptor<CuriosityEngagement>(
+                predicate: #Predicate { $0.deletedAt == nil && $0.thread == nil }
+            )
+        )
+        #expect(loose.count == 1)
+    }
+
+    @Test("Attach helper does not touch ReflectionEntry.body")
+    func attachDoesNotSurfaceReflectionBody() throws {
+        let context = try makeContext()
+
+        let reflection = ReflectionEntry()
+        reflection.mood = "curious"
+        reflection.body = "PRIVATE-ATTACH-SENTINEL"
+        context.insert(reflection)
+
+        let thread = RabbitHoleThread()
+        thread.title = "x"
+        thread.statusRaw = ThreadStatus.open.rawValue
+        context.insert(thread)
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "reflect"
+        engagement.contentTitle = "Quiet five minutes about whales"
+        engagement.reflection = reflection
+        context.insert(engagement)
+        try context.save()
+
+        EngagementThreadAttacher.attach(
+            engagement: engagement,
+            to: thread,
+            context: context
+        )
+
+        // After attach, the thread's stored fields must not have
+        // accidentally absorbed the reflection body anywhere.
+        #expect(!thread.title.contains("PRIVATE-ATTACH-SENTINEL"))
+        if let summary = thread.summary {
+            #expect(!summary.contains("PRIVATE-ATTACH-SENTINEL"))
+        }
+        // Engagement's contentTitle stays as it was.
+        #expect(!engagement.contentTitle.contains("PRIVATE-ATTACH-SENTINEL"))
+        // The reflection link is preserved — but its body lives on
+        // ReflectionEntry, not on the thread or engagement title.
+        #expect(engagement.reflection?.body == "PRIVATE-ATTACH-SENTINEL")
+    }
+
+    @Test("Thread display cap in attach sheet is sane and bounded")
+    func attachSheetThreadCapBounded() {
+        #expect(AttachToThreadSheet.threadDisplayCap > 0)
+        #expect(AttachToThreadSheet.threadDisplayCap <= 100)
     }
 }
