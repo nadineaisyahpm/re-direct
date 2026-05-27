@@ -33,13 +33,18 @@ The four primary screens each own one verb. Blurring them creates the kind of ov
 
 Does **not** own: session telemetry, per-method history, aggregate analytics.
 
-### Rabbit Hole — *continues* (tab 1, as of RH3-B)
+### Rabbit Hole — *continues* (tab 1)
 
-- Surfaces the user's open curiosity threads so they can pick up where they left off.
-- Owns the inert `+ new thread` capsule (wired in RH3-D).
-- RH3-B ships the shell + empty state only; RH3-C wires the today card, your-threads list, loose-ends section, and `ThreadPreviewSheet` against `RabbitHoleThread` + `CuriosityEngagement` queries. See `docs/RABBIT_HOLE_THREADS.md`.
+Full local v1 workflow shipped via the design plan's RH3-B/C/D/E series (= canonical RH2 per `docs/RABBIT_HOLE_THREADS.md §11`):
 
-Does **not** own: picking a method (re:tuals), engagement archive (Re:Log), curiosity discovery (Dashboard), reflection writing (Reflect ritual).
+- Today card — most recently engaged thread, colored by `ActiveMethodStore.activeRedirectMethodSlug` (paper-cream fallback when no active method).
+- Your-threads list — next 3 open/resting threads with teal/mauve accent bars; overflow as "and N more arc/arcs".
+- Loose ends — 3 most recent unthreaded `CuriosityEngagement` rows; each has an active `thread?` pill that opens `AttachToThreadSheet`.
+- Manual thread creation via `+ new thread` capsule (top-right) and empty-state CTA → `NewRabbitHoleThreadSheet`.
+- Engagement attachment via `AttachToThreadSheet` — single-tap confirm; closed/deleted threads excluded from picker.
+- Read-only `ThreadPreviewSheet` — inspects a thread's engagements (capped at 25; reflection bodies never displayed).
+
+Does **not** own: picking a method (re:tuals), engagement archive (Re:Log), curiosity discovery (Dashboard), reflection writing (Reflect ritual), AI-generated trails (Phase 6E, not yet shipped), thread edit/delete/close (deferred), DeviceActivity/Timer integration (parked).
 
 ### Timer — *parked for v2*
 
@@ -209,8 +214,8 @@ User-facing language in `TimerView` should reflect arming, not real-time usage m
 | **Phase 8** | CloudKit private database sync | future |
 | **Phase 9** | TestFlight family/internal distribution | future |
 | **RH0** | Rabbit Hole Threads architecture brief — `docs/RABBIT_HOLE_THREADS.md`. Defines `RabbitHoleThread`, its optional, cross-method relationship to `CuriosityEngagement`, the Phase 6E → thread persistence bridge, and the RH1–RH5 slice sequence. Documentation-only. | done |
-| **RH1** | `RabbitHoleThread` SwiftData model + `ThreadStatus` / `ThreadSourceKind` enums + ordering mechanism + tests. No UI; threads creatable only in tests. | proposed, depends on RH0 |
-| **RH2** | First user-facing thread surface: "thread this engagement" affordance + thread-detail read view + Re:Log Recent Rabbit Holes collapses threaded rows. | proposed, depends on RH1 |
+| **RH1** | `RabbitHoleThread` SwiftData model + `ThreadStatus` / `ThreadSourceKind` enums + ordering mechanism + tests. No UI; threads creatable only in tests. | done |
+| **RH2** | First user-facing thread surface: `RabbitHoleView` at tab 1 (Timer parked), today card + your-threads list + loose-ends section, `ThreadPreviewSheet`, `NewRabbitHoleThreadSheet`, `AttachToThreadSheet`. **Shipped as the design plan's RH3-B/C/D/E series.** | done |
 | **RH3** | Joint Phase 6E ↔ thread persistence — accepted AI trail materializes one `.aiDeepened` thread per `docs/RABBIT_HOLE_THREADS.md §6`. | proposed, depends on RH1 + Phase 6E |
 | **RH4** | re:tuals back-face groups engagements by thread (read-only). | proposed, depends on RH2 |
 | **RH5** | Dashboard "continue an open thread" Daily Direct variant — local-only selection; no proxy contract change. | proposed, depends on RH3 |

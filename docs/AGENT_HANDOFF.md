@@ -45,7 +45,7 @@ DeviceActivity / FamilyControls is **parked for v2** (not abandoned). Family Con
 - **Dashboard** discovers curiosity and now displays an **AI-backed Daily Direct** when fresh cache or proxy returns a recommendation. Falls back silently to seeded curiosity content when AI is unavailable.
 - **re:tuals** remembers per-method ritual history (read-only). Card front carries editorial copy; tapping flips to engagement history for the lane.
 - **Re:Log** summarizes — rabbit holes, reflections (read-only floating popup), boundary sessions.
-- **Rabbit Hole** (tab 1, as of RH3-B) is where the user picks up where they left off. The RH3-B shell ships an editorial title, an inert `+ new thread` capsule, and the "no threads yet." empty state. RH3-C wires the today card, threads list, loose-ends section, and `ThreadPreviewSheet`.
+- **Rabbit Hole** (tab 1) is where the user picks up where they left off. **Full local v1 workflow is shipped** — design-plan RH3-B/C/D/E series = canonical RH2 per `docs/RABBIT_HOLE_THREADS.md §11`. Editorial title, `+ new thread` capsule, today card (most recently engaged thread, colored by `ActiveMethodStore`), your-threads list (next 3, open/resting accent bars), loose-ends section (3 most recent unthreaded engagements with active `thread?` attach pill), empty + loose-only states. `NewRabbitHoleThreadSheet` creates manual threads (title + optional summary). `AttachToThreadSheet` attaches a loose engagement to an existing thread (single-tap confirm; closed/deleted excluded from picker). `ThreadPreviewSheet` shows a thread's engagements read-only (capped at 25; reflection bodies never displayed).
 - **Timer/Boundary** is **parked for v2.** As of RH3-B it is no longer reachable from the tab bar — tab 1 holds `RabbitHoleView`. The `TimerView` source and `TimerSession` model remain in the codebase for Phase 7B / 7C unparking. No primary v1 surface presents the Timer flow; Settings exposure for `TimerView` is deferred (likely to a later slice once thread surfaces stabilize).
 - **Settings** is the local status dossier + S3 data-clearing controls (soft-delete with confirmation).
 
@@ -62,7 +62,7 @@ Preserved invariants:
 - TimerView must not become a generic stopwatch / countdown timer.
 
 Added since the last handoff:
-- **Rabbit Hole Threads architecture is locked in `docs/RABBIT_HOLE_THREADS.md` (RH0, done).** Threads are topic-centric, optional, cross-method, and group `CuriosityEngagement` rows without modifying them. The §13 anti-scope-creep rules are load-bearing — do not cross them without amending that doc first. RH1 (SwiftData model) is the next implementation slice.
+- **Rabbit Hole Threads architecture is locked in `docs/RABBIT_HOLE_THREADS.md` (RH0, done).** Threads are topic-centric, optional, cross-method, and group `CuriosityEngagement` rows without modifying them. The §13 anti-scope-creep rules are load-bearing — do not cross them without amending that doc first. **RH1 (SwiftData model) and RH2 (manual thread creation + overview + attach loose ends) are done** — RH2 shipped under the design plan's RH3-B/C/D/E branding. Next eligible slices: Phase 6E (AI-deepened trails → `.aiDeepened` thread persistence per §6) or a small thread-detail polish slice. RH4/RH5 (re:tuals grouping, Dashboard continue-thread) remain proposed.
 - **Do not delete `TimerSession` without a migration plan.** The model still ships and Re:Log shows its data; v1 may de-emphasize the surface but the row remains.
 - **Do not continue building Timer/DeviceActivity as v1 core** unless the user explicitly resumes Phase 7. Treat any work in that direction as Phase 7B / Phase 7C and apply the `docs/DEVICE_ACTIVITY_FEASIBILITY.md §10` workflow guardrails.
 
@@ -84,6 +84,14 @@ Shipped (in `origin/main` as of post-6D-E):
 
 **Engagement / rabbit hole:**
 - `CuriosityEngagement` model + Re:Log "+ log a rabbit hole" sheet + Dashboard Re:Log widget counts `CuriosityEngagement` rows + Re:Log full screen Recent Rabbit Holes section.
+
+**Rabbit Hole tab (design-plan RH3-B/C/D/E series, = canonical RH2):**
+- `RabbitHoleThread` SwiftData model + `ThreadStatus` / `ThreadSourceKind` enums + tests (RH1).
+- `RabbitHoleView` replaces Timer at tab 1; `SharedNavBar.tabs[1]` is `("arrow.turn.down.right", "rabbit hole")` (RH3-B).
+- Read-only overview with today card + your-threads list (max 3 + overflow) + loose-ends section (max 3), empty + loose-only states, `ThreadPreviewSheet` (cap 25 engagements, `EngagementPreviewRowModel` structurally excludes reflection bodies) (RH3-C).
+- Manual thread creation via `NewRabbitHoleThreadSheet` from `+ new thread` and the empty-state CTA — title required, optional summary, validator + inserter helpers covered by tests (RH3-D).
+- Loose-end attachment via `AttachToThreadSheet` from the `thread?` pill — single-tap confirm, `EngagementThreadAttacher` updates `lastEngagedAt = max(existing, engagement.engagedAt)` + stamps `updatedAt`, idempotent, picker excludes closed/deleted (RH3-E).
+- 267 tests in the `RabbitHoleView` suite covering tab config, copy, mode resolver, step/overflow plural, color palette, privacy invariant, query predicates, partition, engagement display cap, validator, inserter, attacher, picker.
 
 **Reflection:**
 - `ReflectionPrompt` model + seed schema v2 + bundled reflection prompts.
@@ -182,16 +190,17 @@ Hard rules:
 
 ## Likely next slices (proposed, not started)
 
-- **RH1** — `RabbitHoleThread` SwiftData model + `ThreadStatus` / `ThreadSourceKind` enums + ordering mechanism + tests. No UI. Next implementation slice; gated only on user signal to proceed. See `docs/RABBIT_HOLE_THREADS.md §11`.
-- **RH2–RH5** — user-facing thread surface, 6E ↔ thread bridge, re:tuals grouping, Dashboard "continue thread" Daily Direct variant. Sequenced in `docs/RABBIT_HOLE_THREADS.md §11`.
-- **Timer de-centering / Direct surface planning** — the broader v1 re-shape that takes Timer out of the center and puts AI-guided redirection + rabbit-hole threads there.
+- **Phase 6E** — AI-deepened rabbit-hole trails. Persists an accepted trail as one `.aiDeepened` `RabbitHoleThread` with N engagements per `docs/RABBIT_HOLE_THREADS.md §6`. **Recommended next.** Has no FamilyControls dependency.
+- **Thread-detail polish** — small slice options: surface `thread.summary` in the preview sheet (currently persisted by RH3-D but not displayed); or a dedicated thread-detail screen with edit/close affordances; or a "and N more arc/arcs" overflow tap to a paginated list. Low risk, no schema impact. Alternative to Phase 6E if you want a smaller next step.
+- **RH4** (canonical) — re:tuals back-face groups engagements by thread (read-only). Depends on RH2 (done).
+- **RH5** (canonical) — Dashboard "continue an open thread" Daily Direct variant. Local-only selection; no proxy contract change. Depends on RH3 / Phase 6E.
 - **Phase 7B** — DeviceActivity feasibility spike. **Parked**, pending Apple Developer Program + Family Controls entitlement access. Resume only on explicit user signal.
-- **REF3 / REF3.1** — post-ritual reflection (per `docs/REFLECTION_ARCHITECTURE.md` §11). Defined; not implemented.
+- **REF3 / REF3.1** — post-ritual reflection (per `docs/REFLECTION_ARCHITECTURE.md` §11). Defined; not implemented. **Parked** unless explicitly resumed.
 - **Slice 7.1** — Apple Sign-In capability + end-to-end verification (manual Xcode UI step required). Standalone, can land anytime.
 
 ## First task in next chat
 
 1. Run `git status --short`. Confirm only the known Xcode local drifts are unstaged (if present): `re_direct.xcodeproj/project.pbxproj` (signing) and/or `re_direct.xcodeproj/xcshareddata/xcschemes/re_direct.xcscheme` (debug diagnostics). No other working-tree changes expected. Confirm `origin/main` is in sync.
 2. Read the docs listed under **Read first**, especially `docs/AI_INTEGRATION_PLAN.md`, `docs/REFLECTION_ARCHITECTURE.md`, and this file.
-3. Default next action: **propose RH1** — `RabbitHoleThread` SwiftData model + enums + ordering mechanism + tests, per `docs/RABBIT_HOLE_THREADS.md §11`. Do not start coding until the user approves the slice scope.
-4. Stop and ask if the user redirects to something else (e.g. Slice 7.1, a polish pass, or resuming Phase 7).
+3. Default next action: **propose Phase 6E** — AI-deepened rabbit-hole trail persistence per `docs/RABBIT_HOLE_THREADS.md §6`. Alternative: a small thread-detail polish slice (e.g. surface `thread.summary` in the preview sheet). The design-plan RH3-B/C/D/E series (canonical RH2) is done. Do not start coding until the user approves the slice scope.
+4. Stop and ask if the user redirects to something else (e.g. Slice 7.1, a thread-detail polish slice, RH4 / RH5, or resuming Phase 7B).

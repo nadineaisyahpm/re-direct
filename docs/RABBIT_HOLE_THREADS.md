@@ -213,17 +213,19 @@ If a future slice (post-Phase 7C, hypothetical) wants to associate a thread with
 
 ## 11. Proposed slice sequence
 
-All slices below are **proposed**, not started. None ship without explicit approval.
+Status as of this revision: **RH0, RH1, and RH2 are done.** RH3 onward remain proposed and ship only with explicit approval.
 
-| Slice | Goal | Depends on |
-|---|---|---|
-| **RH0** | This document — architecture, invariants, slice sequence | — |
-| **RH1** | `RabbitHoleThread` SwiftData model + `ThreadStatus` / `ThreadSourceKind` enums + relationship to `CuriosityEngagement` (ordering mechanism chosen here) + tests. **No UI.** Model is invisible to the user; threads can only be created in tests. | RH0 accepted |
-| **RH2** | First user-facing thread surface. Most likely: a "thread this engagement" affordance on existing engagement rows (Re:Log) + a thread-detail read view. Manual `.manual` creation path lands here. Re:Log Recent Rabbit Holes collapses threaded rows. | RH1 |
-| **RH3** | Joint 6E ↔ thread persistence slice. Implements the §7 contract: accepted AI trail materializes one `.aiDeepened` thread. 6E acceptance UX lands here if not already shipped by Phase 6E itself. | RH1, Phase 6E (transient form) |
-| **RH4** | re:tuals back-face grouping by thread (§8). Read-only. | RH2 |
-| **RH5** | Dashboard "continue an open thread" Daily Direct variant (§6). Local-only selection logic; no proxy contract change. | RH3 |
-| **RH6 (speculative)** | Auto-grouping heuristic (`.autoGrouped` producer). Requires a privacy review and an explicit user toggle in Settings. Not on the v1 critical path. | RH4 + Settings work |
+| Slice | Goal | Status | Depends on |
+|---|---|---|---|
+| **RH0** | This document — architecture, invariants, slice sequence | **done** | — |
+| **RH1** | `RabbitHoleThread` SwiftData model + `ThreadStatus` / `ThreadSourceKind` enums + relationship to `CuriosityEngagement` (ordering mechanism chosen here) + tests. **No UI.** Model is invisible to the user; threads can only be created in tests. | **done** | RH0 accepted |
+| **RH2** | First user-facing thread surface. **Implemented as the design plan's RH3-B/C/D/E series** (`RabbitHoleView` at tab 1; today card + your-threads list + loose-ends section; `NewRabbitHoleThreadSheet` for manual `.manual` creation; `AttachToThreadSheet` for engagement attachment; read-only `ThreadPreviewSheet`). Re:Log Recent Rabbit Holes grouping is **not** part of this slice — deferred. | **done** | RH1 |
+| **RH3** | Joint 6E ↔ thread persistence slice. Implements the §7 contract: accepted AI trail materializes one `.aiDeepened` thread. 6E acceptance UX lands here if not already shipped by Phase 6E itself. | proposed | RH1, Phase 6E (transient form) |
+| **RH4** | re:tuals back-face grouping by thread (§8). Read-only. | proposed | RH2 |
+| **RH5** | Dashboard "continue an open thread" Daily Direct variant (§6). Local-only selection logic; no proxy contract change. | proposed | RH3 |
+| **RH6 (speculative)** | Auto-grouping heuristic (`.autoGrouped` producer). Requires a privacy review and an explicit user toggle in Settings. Not on the v1 critical path. | speculative | RH4 + Settings work |
+
+**Naming note.** Through implementation, the design plan numbered its sub-slices as RH3-B/C/D/E (B = tab swap + shell, C = read-only overview, D = manual create, E = attach loose ends). Those four commits collectively implement what this document calls canonical RH2. The "RH3" prefix in commit history refers to the design plan, **not** to the canonical RH3 (Phase 6E bridge), which remains proposed.
 
 RH1 through RH4 are the realistic v1 envelope. RH5 and RH6 are listed so the dependency graph is honest, not because they are committed.
 
