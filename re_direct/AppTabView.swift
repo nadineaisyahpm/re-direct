@@ -50,7 +50,7 @@ struct SharedNavBar: View {
     static let tabs: [(icon: String, label: String)] = [
         ("leaf.fill",              "home"),
         ("arrow.turn.down.right",  "rabbit hole"),
-        ("hourglass",              "usage"),
+        ("rectangle.stack.fill",   "re:tuals"),
         ("waveform.path.ecg",      "re:log"),
         ("gearshape.fill",         "settings")
     ]

@@ -31,8 +31,8 @@ struct RabbitHoleViewTests {
         #expect(SharedNavBar.tabs[0].icon  == "leaf.fill")
         #expect(SharedNavBar.tabs[0].label == "home")
 
-        #expect(SharedNavBar.tabs[2].icon  == "hourglass")
-        #expect(SharedNavBar.tabs[2].label == "usage")
+        #expect(SharedNavBar.tabs[2].icon  == "rectangle.stack.fill")
+        #expect(SharedNavBar.tabs[2].label == "re:tuals")
 
         #expect(SharedNavBar.tabs[3].icon  == "waveform.path.ecg")
         #expect(SharedNavBar.tabs[3].label == "re:log")
