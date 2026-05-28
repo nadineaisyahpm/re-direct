@@ -55,6 +55,19 @@ final class RabbitHoleThread {
     @Relationship(deleteRule: .nullify, inverse: \CuriosityEngagement.thread)
     var engagements: [CuriosityEngagement] = []
 
+    /// Optional link to the seeded `CuriosityTopic` this thread germinated
+    /// from. Populated by `AITrailMaterializer` (Phase 6E-D1) in the
+    /// race-protection branch where the root engagement was already
+    /// attached to another thread between trigger and accept — see
+    /// `docs/AI_RABBIT_HOLE_TRAILS_PLAN.md §6`. Default nil; the field is
+    /// also harmless to leave nil for manually-created threads (RH3-D).
+    /// Additive nullable relationship — no SwiftData migration required.
+    var seedTopic: CuriosityTopic? = nil
+
+    /// Optional link to the seeded `CuriosityPrompt` this thread germinated
+    /// from. Same lifecycle and rationale as `seedTopic`.
+    var seedPrompt: CuriosityPrompt? = nil
+
     init() {}
 }
 
