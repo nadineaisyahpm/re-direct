@@ -103,7 +103,7 @@ struct SettingsView: View {
                             }
                             SettingsRow(icon: "hourglass.bottomhalf.filled",
                                         label: "boundary sessions",
-                                        hint: "TimerSession") {
+                                        hint: "parked for v2") {
                                 italicValue("\(sessions.count)")
                             }
                             SettingsRow(icon: "text.quote",
@@ -198,22 +198,22 @@ struct SettingsView: View {
 
                         section(
                             title: "Screen Time",
-                            caption: "platform research",
+                            caption: "parked for v2",
                             delay: 0.48
                         ) {
                             SettingsRow(icon: "iphone.gen3.radiowaves.left.and.right",
-                                        label: "DeviceActivity",
-                                        hint: "feasibility doc · Phase 7B spike") {
-                                italicValue("feasibility planned · not enabled")
+                                        label: "screen-time connection",
+                                        hint: "tracks app usage when this lands") {
+                                italicValue("not yet enabled")
                             }
                             SettingsRow(icon: "person.2.badge.gearshape",
-                                        label: "FamilyControls",
-                                        hint: "entitlement request gated on 7B") {
+                                        label: "app-boundary permission",
+                                        hint: "lets re:direct gently limit apps when this lands") {
                                 italicValue("not enabled")
                             }
                             SettingsRow(icon: "hand.raised",
-                                        label: "fallback signal",
-                                        hint: "user-declared CuriosityEngagement") {
+                                        label: "your logged rabbit holes",
+                                        hint: "what re:direct uses for now") {
                                 StatusChip(text: "ready", variant: .positive)
                             }
                         }
@@ -232,7 +232,7 @@ struct SettingsView: View {
                             }
                             SettingsRow(icon: "archivebox",
                                         label: "clear boundary sessions",
-                                        hint: "soft-delete · sets deletedAt") {
+                                        hint: "soft-delete · parked sessions") {
                                 actionPill("clear", enabled: !sessions.isEmpty) {
                                     pendingAction = .clearBoundarySessions
                                 }
