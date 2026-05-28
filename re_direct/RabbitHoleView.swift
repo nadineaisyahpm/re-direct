@@ -1728,13 +1728,27 @@ struct TrailPreviewSheet: View {
     private func load() async {
         // One async hop, MainActor → URLSession → MainActor. Mirrors
         // the post-ARM64e-fix shape from `DashboardView.loadAICardFromProxy`.
-        let client = AIProxyHTTPClient(config: AIEnvironment.trail)
+        //
+        // QA0 Slice B: route through `AITrailSessionStore.loadingResponse`
+        // so repeated taps on `[deepen]` for the same loose-end within
+        // the 1h TTL return the cached trail without re-hitting the
+        // Cloudflare Worker. Failures are not cached — the retry button
+        // on the .failure state fires this same load() which will fall
+        // through to a fresh proxy call.
+        let interestSeeds = DailyDirectLoader.defaultPersonalInterestSeeds
+        let cacheKey = AITrailRequestBuilder.cacheKey(
+            forRoot: engagement,
+            interestSeeds: interestSeeds
+        )
         let request = AITrailRequestBuilder.build(
             fromRoot: engagement,
-            interestSeeds: DailyDirectLoader.defaultPersonalInterestSeeds
+            interestSeeds: interestSeeds
         )
         do {
-            let response = try await client.callTrail(request)
+            let response = try await AITrailSessionStore.shared.loadingResponse(for: cacheKey) {
+                let client = AIProxyHTTPClient(config: AIEnvironment.trail)
+                return try await client.callTrail(request)
+            }
             loadState = .success(response)
         } catch {
             loadState = .failure

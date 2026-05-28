@@ -117,4 +117,46 @@ enum AITrailRequestBuilder {
         if daysAgo <= 7 { return "this_week" }
         return "older"
     }
+
+    // ─────────────────────────────────────────
+    // MARK: - Cache key derivation (in-memory, local-only)
+    // ─────────────────────────────────────────
+
+    /// Derives an `AITrailCacheKey` for the same inputs that would
+    /// produce a request via `build(fromRoot:…)`. Co-located here so a
+    /// future change to the request shape automatically updates the
+    /// cache-key shape too.
+    ///
+    /// Normalization rules (must match the wire shape's idempotency):
+    /// - `normalizedRootTitle` — trimmed + lowercased
+    /// - `methodSlug` — lowercased (canonical slugs are already lowercase)
+    /// - `recencyBucket` — derived via `recencyBucket(forEngagedAt:…)`
+    /// - `seedsFingerprint` — each seed trimmed + lowercased, sorted,
+    ///   joined with `"|"` so seed order doesn't shift the key
+    ///
+    /// The `engagementID` is included for collision avoidance — two
+    /// engagements with identical-looking titles still get distinct
+    /// cache entries. The ID is local-only and never reaches the wire.
+    static func cacheKey(
+        forRoot engagement: CuriosityEngagement,
+        interestSeeds: [String],
+        now: Date = .now,
+        locale: String = Locale.current.identifier,
+        maxSteps: Int = AITrailRequestBuilder.defaultMaxSteps
+    ) -> AITrailCacheKey {
+        AITrailCacheKey(
+            engagementID: engagement.id,
+            normalizedRootTitle: engagement.contentTitle
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased(),
+            methodSlug: engagement.methodSlug.lowercased(),
+            recencyBucket: recencyBucket(forEngagedAt: engagement.engagedAt, now: now),
+            seedsFingerprint: interestSeeds
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .sorted()
+                .joined(separator: "|"),
+            locale: locale,
+            maxSteps: maxSteps
+        )
+    }
 }

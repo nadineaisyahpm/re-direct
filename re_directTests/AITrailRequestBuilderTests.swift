@@ -300,6 +300,191 @@ struct AITrailRequestBuilderTests {
         #expect(["today", "this_week", "older"].contains(bucketValue))
     }
 
+    // MARK: - Cache key derivation (QA0 Slice B)
+
+    @Test("cacheKey derivation is deterministic for the same inputs")
+    func cacheKeyDeterministic() throws {
+        let context = try makeContext()
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "Bioluminescence"
+        engagement.engagedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        context.insert(engagement)
+        try context.save()
+
+        let key1 = AITrailRequestBuilder.cacheKey(
+            forRoot: engagement,
+            interestSeeds: ["AI", "Neuroscience"],
+            now: engagement.engagedAt
+        )
+        let key2 = AITrailRequestBuilder.cacheKey(
+            forRoot: engagement,
+            interestSeeds: ["AI", "Neuroscience"],
+            now: engagement.engagedAt
+        )
+        #expect(key1 == key2)
+    }
+
+    @Test("cacheKey normalizes title: trim + lowercase")
+    func cacheKeyTitleNormalization() throws {
+        let context = try makeContext()
+        let a = CuriosityEngagement()
+        a.methodSlug = "read"
+        a.contentTitle = "  Bioluminescence  "
+        context.insert(a)
+
+        let b = CuriosityEngagement()
+        b.methodSlug = "read"
+        b.contentTitle = "bioluminescence"
+        context.insert(b)
+        try context.save()
+
+        let keyA = AITrailRequestBuilder.cacheKey(forRoot: a, interestSeeds: ["AI"])
+        let keyB = AITrailRequestBuilder.cacheKey(forRoot: b, interestSeeds: ["AI"])
+        #expect(keyA.normalizedRootTitle == "bioluminescence")
+        #expect(keyB.normalizedRootTitle == "bioluminescence")
+        // Different engagements still get distinct keys because of engagementID.
+        #expect(keyA != keyB)
+    }
+
+    @Test("cacheKey changes when methodSlug changes")
+    func cacheKeyChangesOnMethodSlug() throws {
+        let context = try makeContext()
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "x"
+        context.insert(engagement)
+        try context.save()
+
+        let keyA = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"])
+        engagement.methodSlug = "watch"
+        let keyB = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"])
+
+        #expect(keyA != keyB)
+        #expect(keyA.methodSlug == "read")
+        #expect(keyB.methodSlug == "watch")
+    }
+
+    @Test("cacheKey changes when content title changes")
+    func cacheKeyChangesOnTitle() throws {
+        let context = try makeContext()
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "First"
+        context.insert(engagement)
+        try context.save()
+
+        let keyA = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"])
+        engagement.contentTitle = "Second"
+        let keyB = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"])
+
+        #expect(keyA != keyB)
+    }
+
+    @Test("cacheKey changes when maxSteps changes")
+    func cacheKeyChangesOnMaxSteps() throws {
+        let context = try makeContext()
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "x"
+        context.insert(engagement)
+        try context.save()
+
+        let keyA = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"], maxSteps: 3)
+        let keyB = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"], maxSteps: 5)
+
+        #expect(keyA != keyB)
+        #expect(keyA.maxSteps == 3)
+        #expect(keyB.maxSteps == 5)
+    }
+
+    @Test("cacheKey changes when locale changes")
+    func cacheKeyChangesOnLocale() throws {
+        let context = try makeContext()
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "x"
+        context.insert(engagement)
+        try context.save()
+
+        let keyA = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"], locale: "en-US")
+        let keyB = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"], locale: "fr-FR")
+
+        #expect(keyA != keyB)
+    }
+
+    @Test("cacheKey is invariant to interest-seed order")
+    func cacheKeyInvariantToSeedOrder() throws {
+        let context = try makeContext()
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "x"
+        context.insert(engagement)
+        try context.save()
+
+        let keyA = AITrailRequestBuilder.cacheKey(
+            forRoot: engagement,
+            interestSeeds: ["Neuroscience", "AI", "Machine Learning"]
+        )
+        let keyB = AITrailRequestBuilder.cacheKey(
+            forRoot: engagement,
+            interestSeeds: ["AI", "Machine Learning", "Neuroscience"]
+        )
+
+        #expect(keyA == keyB)
+    }
+
+    @Test("cacheKey changes when interest seeds change set")
+    func cacheKeyChangesOnSeedsSet() throws {
+        let context = try makeContext()
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "x"
+        context.insert(engagement)
+        try context.save()
+
+        let keyA = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["AI"])
+        let keyB = AITrailRequestBuilder.cacheKey(forRoot: engagement, interestSeeds: ["Biology"])
+
+        #expect(keyA != keyB)
+    }
+
+    @Test("cacheKey changes when recency bucket changes (engagedAt drift across the boundary)")
+    func cacheKeyChangesOnRecencyBucket() throws {
+        let context = try makeContext()
+        var calUTC = Calendar(identifier: .gregorian)
+        calUTC.timeZone = TimeZone(identifier: "UTC")!
+
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let today = now
+        let twoWeeksAgo = calUTC.date(byAdding: .day, value: -14, to: now)!
+
+        let engagement = CuriosityEngagement()
+        engagement.methodSlug = "read"
+        engagement.contentTitle = "x"
+        engagement.engagedAt = today
+        context.insert(engagement)
+        try context.save()
+
+        let keyToday = AITrailRequestBuilder.cacheKey(
+            forRoot: engagement,
+            interestSeeds: ["AI"],
+            now: now
+        )
+        engagement.engagedAt = twoWeeksAgo
+        let keyOlder = AITrailRequestBuilder.cacheKey(
+            forRoot: engagement,
+            interestSeeds: ["AI"],
+            now: now
+        )
+
+        #expect(keyToday != keyOlder)
+        #expect(keyToday.recencyBucket == "today")
+        #expect(keyOlder.recencyBucket == "older")
+    }
+
+    // MARK: - Pre-existing privacy invariants (unchanged)
+
     @Test("Build (engagement) does NOT include id, sourceURL, topic, or prompt fields")
     func buildFromEngagementOmitsIdentifiersAndLinks() throws {
         let context = try makeContext()
