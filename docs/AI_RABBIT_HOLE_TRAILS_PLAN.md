@@ -175,6 +175,10 @@ The sheet renders the cache hit (or seed fallback) immediately on appear; if the
 - Trails: **1 hour**.
 - Reasoning: Daily Direct's 24h TTL makes sense because the user's "today" intent is stable. A trail is anchored to a specific root engagement *and* current attention; re-tapping `deepen` an hour later, the user may want a refreshed take. One hour balances cost (most users won't re-tap within an hour) and freshness (within an hour, the cached take is still relevant).
 
+### Status (post-6E-D2)
+
+**Shipped via QA0 Slice B** (commit `98316c0`, `feat(ai): cache trail previews per session`). `AITrailSessionStore` is a `@MainActor` in-memory singleton with the 1h TTL above; key derivation lives at `AITrailRequestBuilder.cacheKey(forRoot:)`. `TrailPreviewSheet.load()` routes through `loadingResponse(for:call:)`. **In-memory only** — no SwiftData persistence; resets on cold launch. Failures are deliberately not cached so retry works against a fresh call. The seeded `TopicTrail` fallback (rung 3 above) is still proposed (Phase 6E-E).
+
 ---
 
 ## 8. Cost controls

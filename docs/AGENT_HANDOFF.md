@@ -40,6 +40,19 @@ re:direct is a **local-first curiosity redirection app**. v1 focus:
 
 DeviceActivity / FamilyControls is **parked for v2** (not abandoned). Family Controls entitlement isn't available on the current Personal Team. Phase 7B resumes when the Apple Developer Program + entitlement land. See `docs/DEVICE_ACTIVITY_FEASIBILITY.md`.
 
+## Milestone — v1 core loop shipped (entering hardening, not expansion)
+
+**The v1 spine is shipped end-to-end.** A user can today:
+
+1. Open **Dashboard** → see an AI-personalized Daily Direct card (or seeded fallback).
+2. Open **Re:Log** → tap `+ log a rabbit hole` → record a curiosity manually.
+3. Open **Rabbit Hole** (tab 1) → see the loose engagement under "loose ends" + any threads they've created.
+4. Create a thread manually via `+ new thread`, OR attach the loose end to an existing thread via `[thread?]`, OR tap `[deepen]` → AI proposes a bounded 3–5 step trail → accept → it materializes as a `.aiDeepened` `RabbitHoleThread` with N step engagements.
+5. Re:Log surfaces logged rabbit holes + reflection prompts (Reflect ritual) over time.
+6. **All of this is local-first.** No reflection body, no engagement note, no identifier, no raw timestamp ever leaves the device. iOS calls only the Cloudflare Worker — never a vendor directly. No API keys in iOS.
+
+**Posture for the next chat: hardening and polish, not broad feature expansion.** The audit (QA0) found three notable rough edges; all three are shipped (Slice A/B/C below). Remaining options — listed in `Likely next slices` — are deliberately scoped to **manual QA**, **small targeted polish**, or **incremental optional fills (6E-E, RH4, RH5)**. Avoid large feature work unless the user explicitly asks.
+
 ## Surface architecture (load-bearing)
 
 - **Dashboard** discovers curiosity and now displays an **AI-backed Daily Direct** when fresh cache or proxy returns a recommendation. Falls back silently to seeded curiosity content when AI is unavailable.
@@ -146,8 +159,13 @@ iOS AI pipeline — Rabbit Hole Trails (Phase 6E end-to-end loop, shipped):
 - `TrailPreviewSheet` (6E-D2): state machine `.loading` / `.success(response)` / `.failure`. On appear, fires one `callTrail` request via a single-hop MainActor→URLSession→MainActor pattern (matches the post-ARM64e-fix Daily Direct path). Success state renders trail title + optional summary + 3–5 step rows (type chip, title, rationale, optional `↗ link` indicator, optional minutes) + `[accept trail]` CTA. Accept invokes `AITrailMaterializer.materialize` then `dismiss()`. Failure offers `[try again]` (re-fires the load). Cancel / drag-dismiss in any state writes nothing.
 - End-to-end flow: log a loose rabbit hole → tap `deepen` → iOS calls Cloudflare Worker `/v1/trail` → DeepSeek returns bounded 3–5 step trail → user reviews `TrailPreviewSheet` → user taps `accept trail` → app materializes one `.aiDeepened` `RabbitHoleThread` + step engagements → root loose end disappears from loose-ends list (if Branch A attached it) → new thread visible in the overview.
 
+**QA0 audit follow-ups (shipped):**
+- **Slice A — `fix(nav): rename re:tuals tab`** (commit `68b45a8`). Tab 2's nav-bar tuple changed from `("hourglass", "usage")` (a misleading leftover from before the Timer→Rabbit Hole tab swap) to `("rectangle.stack.fill", "re:tuals")`. Icon + label now match the view that mounts there.
+- **Slice B — `feat(ai): cache trail previews per session`** (commit `98316c0`). `AITrailSessionStore` is a `@MainActor` in-memory singleton with 1h TTL (per `docs/AI_RABBIT_HOLE_TRAILS_PLAN.md §7`). `AITrailRequestBuilder.cacheKey(forRoot:)` derives a `Hashable` key from the engagement UUID + canonicalized request inputs. `TrailPreviewSheet.load()` routes through `AITrailSessionStore.shared.loadingResponse(for:call:)`: cache hit returns immediately without a proxy call; cache miss fires one `callTrail`; **failures are not cached** so the retry button works fresh. In-memory only — no SwiftData persistence; resets on cold launch.
+- **Slice C — `polish(settings): clarify parked capability copy`** (commit `2258a54`). Settings rows that previously exposed framework jargon (`DeviceActivity`, `FamilyControls`, `fallback signal`, `TimerSession`, `feasibility doc · Phase 7B spike`) now read as a user-facing local-status surface (`screen-time connection`, `app-boundary permission`, `your logged rabbit holes`, `parked for v2`, `tracks app usage when this lands`). No data-control behavior changed; "parked for v2" reads honestly without sounding broken.
+
 Tests at last checkpoint:
-- **332 / 332 passing across iOS suites** after Phase 6E-D2 (post-clean-build count fluctuates 326–334 because of the conditionally-skipped Keychain suite; zero failures).
+- **357 / 357 passing across iOS suites** after QA0 Slice B (post-clean-build count fluctuates 351–357 because of the conditionally-skipped Keychain suite; zero failures).
 - Proxy tests passing in the sibling repo post-6E-B `/v1/trail` endpoint (counts maintained in the proxy repo's README).
 
 ## Privacy posture
@@ -200,18 +218,40 @@ Hard rules:
 
 ## Likely next slices (proposed, not started)
 
-- **Phase 6E-E** — Seeded `TopicTrail` fallback for proxy-unavailable. May require a seed-content audit if `seed/curiosity_seed_v1.json`'s coverage is too thin. Smallest remaining 6E work.
+**Posture:** the v1 core loop is shipped. The next phase is hardening / polish, not broad feature expansion. **Avoid large new features unless the user explicitly asks.**
+
+### Recommended next
+
+- **MILESTONE-QA1 — product hardening / manual QA pass.** End-to-end manual walkthroughs of the v1 spine on simulator + physical device, with specific attention to: cold launch, schema migration sanity (RH1 + RH3-E + 6E-D1 additions), Daily Direct AI vs seeded fallback, Re:Log log flow, Rabbit Hole tab full loop (create / attach / deepen / accept), `TrailPreviewSheet` loading / success / failure / retry paths, trail cache hit/miss behavior, Settings parked-copy reads cleanly. **No code changes expected**; output is a bug list ordered by severity. If real issues surface, address them in a single small commit per finding. Likely 1 session.
+
+### Optional small fills (any can land next, in any order)
+
+- **Phase 6E-E** — Seeded `TopicTrail` fallback for proxy-unavailable. When the proxy is unreachable, render a matching seeded trail for the root's topic instead of the quiet "couldn't fetch a trail just now." copy. May require a seed-content audit if `seed/curiosity_seed_v1.json`'s `TopicTrail` coverage is too thin. Smallest remaining 6E work.
+- **Thread-detail polish** — small slice options: surface `thread.summary` in `ThreadPreviewSheet` (currently persisted by RH3-D + 6E-D1 but not displayed); a dedicated thread-detail screen with edit/close affordances; an "and N more arc/arcs" overflow tap to a paginated list. Low risk, no schema impact.
+- **F4 — `AIRecommendation` cache row pruning.** Gradual storage bloat from un-pruned Daily Direct cache rows. Add a max-rows cap or scheduled cleanup.
+
+### Available but **NOT** recommended without explicit user direction
+
 - **Phase 6E-F** — Additional trail triggers (from Daily Direct card; from existing thread "extend with AI"). Deferred until 6E quality is validated in real use.
-- **Thread-detail polish** — small slice options: surface `thread.summary` in the preview sheet (currently persisted by RH3-D + 6E-D1 but not displayed in `ThreadPreviewSheet`); a dedicated thread-detail screen with edit/close affordances; an "and N more arc/arcs" overflow tap to a paginated list. Low risk, no schema impact.
 - **RH4** (canonical) — re:tuals back-face groups engagements by thread (read-only). Depends on RH2 (done).
-- **RH5** (canonical) — Dashboard "continue an open thread" Daily Direct variant. Local-only selection; no proxy contract change. Depends on RH3 / Phase 6E.
+- **RH5** (canonical) — Dashboard "continue an open thread" Daily Direct variant. Local-only selection; no proxy contract change. Depends on canonical RH3 / Phase 6E (which is shipped).
+- **REF3 / REF3.1** — post-ritual reflection (per `docs/REFLECTION_ARCHITECTURE.md` §11). Defined; not implemented. **Parked.**
+- **Slice 7.1** — Apple Sign-In capability + end-to-end verification (manual Xcode UI step required). Standalone; can land anytime when the user wants to ship to TestFlight.
 - **Phase 7B** — DeviceActivity feasibility spike. **Parked**, pending Apple Developer Program + Family Controls entitlement access. Resume only on explicit user signal.
-- **REF3 / REF3.1** — post-ritual reflection (per `docs/REFLECTION_ARCHITECTURE.md` §11). Defined; not implemented. **Parked** unless explicitly resumed.
-- **Slice 7.1** — Apple Sign-In capability + end-to-end verification (manual Xcode UI step required). Standalone, can land anytime.
 
 ## First task in next chat
 
-1. Run `git status --short`. Confirm only the known Xcode local drifts are unstaged (if present): `re_direct.xcodeproj/project.pbxproj` (signing) and/or `re_direct.xcodeproj/xcshareddata/xcschemes/re_direct.xcscheme` (debug diagnostics). No other working-tree changes expected. Confirm `origin/main` is in sync.
-2. Read the docs listed under **Read first**, especially `docs/AI_INTEGRATION_PLAN.md`, `docs/REFLECTION_ARCHITECTURE.md`, and this file.
-3. Default next action: **wait for the user to direct.** The Phase 6E end-to-end AI-deepened trail loop is shipped (through 6E-D2). Plausible next slices: Phase 6E-E (seeded fallback), Phase 6E-F (additional triggers), thread-detail polish (surface `thread.summary` in the preview sheet), RH4 (re:tuals thread grouping), RH5 (Dashboard continue-thread), Slice 7.1 (Apple Sign-In), REF3 (post-ritual reflection), or unparking Phase 7B.
-4. Do not start coding until the user approves the slice scope.
+1. **Run `git status --short`.** Confirm only the two known Xcode local drifts are unstaged (if present): `re_direct.xcodeproj/project.pbxproj` (personal signing values) and/or `re_direct.xcodeproj/xcshareddata/xcschemes/re_direct.xcscheme` (debug diagnostics — `disableMainThreadChecker = "YES"` etc.). No other working-tree changes expected. Confirm `origin/main` is in sync.
+2. **Read the handoff doc set**, in this order:
+   - This file (`docs/AGENT_HANDOFF.md`) — Milestone callout + Current implementation state + Likely next slices
+   - `docs/ROADMAP.md` — slice-sequence table for status snapshots
+   - `docs/RABBIT_HOLE_THREADS.md` — RH architecture (load-bearing; §13 anti-scope-creep rules)
+   - `docs/AI_INTEGRATION_PLAN.md` — Phase 6 lane overview
+   - `docs/AI_RABBIT_HOLE_TRAILS_PLAN.md` — 6E details
+3. **Ask the user which direction.** The v1 core loop is shipped (Milestone callout above). Three first-class options for the next slice:
+   - **MILESTONE-QA1** — product hardening / manual QA pass. Recommended next if the goal is stability before any further feature work.
+   - **Phase 6E-E** — seeded `TopicTrail` fallback for proxy-unavailable trails. Small fill; ~half a slice.
+   - **Thread-detail polish** — surface `thread.summary` in `ThreadPreviewSheet`, or build a dedicated thread-detail screen. Low risk, no schema impact.
+   - Or something else entirely (Slice 7.1, RH4/RH5, REF3, Phase 7B unparking). Treat large feature requests with the §13 anti-scope-creep rules in `docs/RABBIT_HOLE_THREADS.md`.
+4. **Do not start coding until the user approves the slice scope.** Do not auto-pick a slice from the "Available but NOT recommended" list without explicit user direction.
+5. **Do not stage either Xcode drift** in any commit unless the user explicitly opts in.
