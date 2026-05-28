@@ -56,6 +56,7 @@ struct RabbitHoleView: View {
     @State private var selectedThread: RabbitHoleThread? = nil
     @State private var showCreateSheet: Bool = false
     @State private var attachingEngagement: CuriosityEngagement? = nil
+    @State private var deepeningEngagement: CuriosityEngagement? = nil
 
     // MARK: Derived view state
 
@@ -142,6 +143,9 @@ struct RabbitHoleView: View {
             .sheet(item: $attachingEngagement) { engagement in
                 AttachToThreadSheet(engagement: engagement)
             }
+            .sheet(item: $deepeningEngagement) { engagement in
+                TrailPreviewSheet(engagement: engagement)
+            }
         }
         .preferredColorScheme(.light)
     }
@@ -175,9 +179,11 @@ struct RabbitHoleView: View {
                             .fill(DSColor.ink.opacity(0.08))
                             .frame(height: 0.5)
                     }
-                    LooseEndRow(engagement: engagement) {
-                        attachingEngagement = engagement
-                    }
+                    LooseEndRow(
+                        engagement: engagement,
+                        onAttach: { attachingEngagement = engagement },
+                        onDeepen: { deepeningEngagement = engagement }
+                    )
                 }
             }
             .padding(.top, 4)
@@ -251,9 +257,11 @@ struct RabbitHoleView: View {
                                 .fill(DSColor.ink.opacity(0.08))
                                 .frame(height: 0.5)
                         }
-                        LooseEndRow(engagement: engagement) {
-                        attachingEngagement = engagement
-                    }
+                        LooseEndRow(
+                        engagement: engagement,
+                        onAttach: { attachingEngagement = engagement },
+                        onDeepen: { deepeningEngagement = engagement }
+                    )
                     }
                 }
                 .padding(.top, 4)
@@ -519,16 +527,38 @@ private struct ThreadListRow: View {
 private struct LooseEndRow: View {
     let engagement: CuriosityEngagement
     let onAttach: () -> Void
+    let onDeepen: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: 6) {
             Text(engagement.contentTitle)
                 .font(.custom("InstrumentSerif-Italic", size: 13))
                 .foregroundColor(DSColor.ink.opacity(0.72))
                 .lineLimit(1)
                 .truncationMode(.tail)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)
+
+            // "deepen" pill — opens the AI TrailPreviewSheet (Phase 6E-D2).
+            // Paper-cream so it's visually distinct from the yellow
+            // "thread?" pill while staying inside the existing palette.
+            Button(action: onDeepen) {
+                Text("deepen")
+                    .font(.custom("InstrumentSerif-Italic", size: 10))
+                    .foregroundColor(DSColor.ink.opacity(0.60))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background {
+                        Capsule()
+                            .fill(DSColor.paperCream)
+                            .overlay {
+                                Capsule()
+                                    .stroke(DSColor.ink.opacity(0.22), lineWidth: 0.5)
+                            }
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Deepen '\(engagement.contentTitle)' with AI")
 
             // "thread?" pill — opens the attach-to-thread sheet (RH3-E).
             Button(action: onAttach) {
@@ -1456,6 +1486,342 @@ private struct AttachThreadRow: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Attach to \(displayTitle), \(ThreadStepCount.display(thread.engagements.count))")
+    }
+}
+
+// ─────────────────────────────────────────────
+// MARK: - Trail Preview Sheet (Phase 6E-D2)
+// ─────────────────────────────────────────────
+
+/// Bottom sheet that fetches an AI-deepened trail for a loose
+/// `CuriosityEngagement` and lets the user accept it into a new
+/// `RabbitHoleThread` or discard it.
+///
+/// State machine: `.loading` → `.success(response)` | `.failure`.
+/// Accept is only available in `.success`; retry only in `.failure`.
+/// Cancel and drag-dismiss work in every state and write nothing.
+///
+/// Privacy invariants:
+/// - Request construction goes through `AITrailRequestBuilder.build(fromRoot:)`,
+///   which extracts only the allowlisted fields (title, methodSlug,
+///   coarse recency bucket). Reflection, note, identifiers, and exact
+///   timestamps are never read here.
+/// - Display: only `engagement.contentTitle` is read from the
+///   engagement (in the header context line). The trail's text content
+///   comes from the proxy response, not from the user's local
+///   reflection or note text.
+///
+/// Memory: `AITrailResponse.steps` is proxy-capped at 5; no further
+/// cap added in this view.
+///
+/// Closure-capture safety: the trail HTTP client is constructed inside
+/// the `.task` closure and `callTrail(_:)` is called directly — one
+/// async hop from MainActor → URLSession → MainActor. Matches the
+/// post-ARM64e-fix shape used by Dashboard's Daily Direct path; does
+/// NOT use the multi-hop closure pattern that crashed on device.
+struct TrailPreviewSheet: View {
+    let engagement: CuriosityEngagement
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    @State private var loadState: TrailLoadState = .loading
+
+    enum TrailLoadState: Sendable {
+        case loading
+        case success(AITrailResponse)
+        case failure
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            // Header — leading cancel + true-centered title, no trailing.
+            // Same pattern as AttachToThreadSheet so "no right action"
+            // reads as intentional.
+            ZStack {
+                Text("deepen with AI")
+                    .font(.custom("InstrumentSerif-Italic", size: 17))
+                    .foregroundColor(DSColor.ink)
+
+                HStack {
+                    Button("cancel") { dismiss() }
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(DSColor.inkSoft.opacity(0.65))
+                        .buttonStyle(.plain)
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
+            // Engagement context line — title only.
+            VStack(alignment: .leading, spacing: 4) {
+                Text("deepening")
+                    .font(.custom("InstrumentSerif-Italic", size: 11))
+                    .foregroundColor(DSColor.inkSoft.opacity(0.50))
+                Text(engagement.contentTitle)
+                    .font(.custom("InstrumentSerif-Italic", size: 16))
+                    .foregroundColor(DSColor.ink)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 14)
+
+            Rectangle()
+                .fill(DSColor.ink.opacity(0.10))
+                .frame(height: 0.5)
+
+            // Body — state-driven.
+            switch loadState {
+            case .loading:
+                loadingBody
+            case .success(let response):
+                successBody(response)
+            case .failure:
+                failureBody
+            }
+        }
+        .background {
+            PaperBackground(variant: .warm).ignoresSafeArea()
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .task {
+            await load()
+        }
+    }
+
+    // MARK: state bodies
+
+    private var loadingBody: some View {
+        VStack(spacing: 14) {
+            Spacer(minLength: 36)
+            ProgressView()
+                .controlSize(.small)
+                .tint(DSColor.ink.opacity(0.45))
+            Text("thinking…")
+                .font(.custom("InstrumentSerif-Italic", size: 15))
+                .foregroundColor(DSColor.inkSoft.opacity(0.60))
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+    }
+
+    @ViewBuilder
+    private func successBody(_ response: AITrailResponse) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+
+                // Trail title + summary
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(response.title.isEmpty ? "untitled trail" : response.title)
+                        .font(.custom("InstrumentSerif-Italic", size: 22))
+                        .foregroundColor(DSColor.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let summary = response.summary,
+                       !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(summary)
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundColor(DSColor.inkSoft.opacity(0.65))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+
+                // Steps
+                VStack(spacing: 0) {
+                    ForEach(Array(response.steps.enumerated()), id: \.offset) { idx, step in
+                        if idx > 0 {
+                            Rectangle()
+                                .fill(DSColor.ink.opacity(0.08))
+                                .frame(height: 0.5)
+                                .padding(.horizontal, 24)
+                        }
+                        TrailStepRow(step: step, index: idx + 1)
+                    }
+                }
+                .padding(.top, 6)
+
+                // Accept CTA
+                Button {
+                    accept(response)
+                } label: {
+                    HStack {
+                        Spacer()
+                        Text("accept trail")
+                            .font(.custom("InstrumentSerif-Italic", size: 16))
+                            .foregroundColor(DSColor.ink)
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                    .background {
+                        Capsule()
+                            .fill(DSColor.paperCream)
+                            .overlay {
+                                Capsule()
+                                    .stroke(DSColor.ink.opacity(0.30), lineWidth: 1)
+                            }
+                            .shadow(color: DSColor.ink.opacity(0.10),
+                                    radius: 0, x: 1.5, y: 1.5)
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
+                .accessibilityLabel("Accept this trail")
+            }
+        }
+    }
+
+    private var failureBody: some View {
+        VStack(spacing: 10) {
+            Spacer(minLength: 36)
+
+            Text("couldn't fetch a trail just now.")
+                .font(.custom("InstrumentSerif-Italic", size: 17))
+                .foregroundColor(DSColor.ink.opacity(0.70))
+                .multilineTextAlignment(.center)
+
+            Text("the proxy was unreachable. try again or close and use + new thread.")
+                .font(.system(size: 12, weight: .light))
+                .foregroundColor(DSColor.inkSoft.opacity(0.50))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                // Reset to loading and re-fire the load.
+                loadState = .loading
+                Task { await load() }
+            } label: {
+                Text("try again")
+                    .font(.custom("InstrumentSerif-Italic", size: 14))
+                    .foregroundColor(DSColor.ink.opacity(0.85))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(DSColor.paperCream)
+                            .overlay {
+                                Capsule()
+                                    .stroke(DSColor.ink.opacity(0.22), lineWidth: 1)
+                            }
+                    }
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 28)
+    }
+
+    // MARK: actions
+
+    private func load() async {
+        // One async hop, MainActor → URLSession → MainActor. Mirrors
+        // the post-ARM64e-fix shape from `DashboardView.loadAICardFromProxy`.
+        let client = AIProxyHTTPClient(config: AIEnvironment.trail)
+        let request = AITrailRequestBuilder.build(
+            fromRoot: engagement,
+            interestSeeds: DailyDirectLoader.defaultPersonalInterestSeeds
+        )
+        do {
+            let response = try await client.callTrail(request)
+            loadState = .success(response)
+        } catch {
+            loadState = .failure
+        }
+    }
+
+    private func accept(_ response: AITrailResponse) {
+        _ = AITrailMaterializer.materialize(
+            response: response,
+            root: engagement,
+            into: modelContext
+        )
+        dismiss()
+    }
+}
+
+/// One step row in the trail preview. Read-only; the URL indicator is
+/// non-tappable in this slice (URL handling is a future polish).
+private struct TrailStepRow: View {
+    let step: AITrailStep
+    let index: Int
+
+    private var typeLabel: String {
+        // Display the step type as-is (proxy validates). The materializer
+        // is the source of truth for the methodSlug mapping.
+        step.type.lowercased()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+
+            Text("\(index)")
+                .font(.custom("InstrumentSerif-Italic", size: 13))
+                .foregroundColor(DSColor.ink.opacity(0.40))
+                .frame(width: 14, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 4) {
+
+                HStack(spacing: 6) {
+                    Text(typeLabel)
+                        .font(.custom("InstrumentSerif-Italic", size: 11))
+                        .foregroundColor(DSColor.ink.opacity(0.60))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 1)
+                        .background {
+                            Capsule()
+                                .fill(Color.white.opacity(0.55))
+                                .overlay {
+                                    Capsule()
+                                        .stroke(DSColor.ink.opacity(0.18), lineWidth: 0.5)
+                                }
+                        }
+
+                    if let url = step.url, !url.isEmpty {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9))
+                            Text("link")
+                                .font(.system(size: 10))
+                        }
+                        .foregroundColor(DSColor.ink.opacity(0.40))
+                    }
+
+                    if let minutes = step.estimatedMinutes, minutes > 0 {
+                        Text("· \(minutes) min")
+                            .font(.system(size: 10))
+                            .foregroundColor(DSColor.inkSoft.opacity(0.55))
+                    }
+                }
+
+                Text(step.title)
+                    .font(.custom("InstrumentSerif-Italic", size: 15))
+                    .foregroundColor(DSColor.ink)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(step.rationale)
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundColor(DSColor.inkSoft.opacity(0.60))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 11)
     }
 }
 
