@@ -62,7 +62,7 @@ Preserved invariants:
 - TimerView must not become a generic stopwatch / countdown timer.
 
 Added since the last handoff:
-- **Rabbit Hole Threads architecture is locked in `docs/RABBIT_HOLE_THREADS.md` (RH0, done).** Threads are topic-centric, optional, cross-method, and group `CuriosityEngagement` rows without modifying them. The §13 anti-scope-creep rules are load-bearing — do not cross them without amending that doc first. **RH1 (SwiftData model) and RH2 (manual thread creation + overview + attach loose ends) are done** — RH2 shipped under the design plan's RH3-B/C/D/E branding. Next eligible slices: Phase 6E (AI-deepened trails → `.aiDeepened` thread persistence per §6) or a small thread-detail polish slice. RH4/RH5 (re:tuals grouping, Dashboard continue-thread) remain proposed.
+- **Rabbit Hole Threads architecture is locked in `docs/RABBIT_HOLE_THREADS.md` (RH0, done).** Threads are topic-centric, optional, cross-method, and group `CuriosityEngagement` rows without modifying them. The §13 anti-scope-creep rules are load-bearing — do not cross them without amending that doc first. **RH1 (SwiftData model), RH2 (manual thread creation + overview + attach loose ends), and Phase 6E (AI-deepened trail → `.aiDeepened` thread persistence per §6) are all shipped.** RH2 shipped under the design plan's RH3-B/C/D/E branding; 6E shipped through 6E-D2. Remaining canonical slices: RH4 (re:tuals back-face thread grouping), RH5 (Dashboard "continue thread" Daily Direct variant), Phase 6E-E (seeded `TopicTrail` fallback for offline / proxy-unavailable), Phase 6E-F (additional triggers — Daily Direct card, existing thread "extend with AI"). All proposed, none active.
 - **Do not delete `TimerSession` without a migration plan.** The model still ships and Re:Log shows its data; v1 may de-emphasize the surface but the row remains.
 - **Do not continue building Timer/DeviceActivity as v1 core** unless the user explicitly resumes Phase 7. Treat any work in that direction as Phase 7B / Phase 7C and apply the `docs/DEVICE_ACTIVITY_FEASIBILITY.md §10` workflow guardrails.
 
@@ -112,7 +112,7 @@ Shipped (in `origin/main` as of post-6D-E):
 - S2: live status values + capability statuses.
 - S3: local data controls with confirmable soft-delete.
 
-**Phase 6 — AI lane (shipped through 6D-E):**
+**Phase 6 — AI lane (shipped through 6E-D2 — end-to-end AI rabbit-hole trails are live):**
 
 Proxy repo:
 - `/Users/mac/Desktop/re_direct_ai_proxy` — sibling repo, private.
@@ -124,21 +124,31 @@ Proxy repo:
   - DeepSeek allowlist: only `deepseek-v4-flash` (anything else → `proxy_unavailable`).
   - OpenRouter allowlist: only `meta-llama/llama-3.3-70b-instruct`.
   - iOS request payload **cannot** specify `model`, `model_name`, or `MODEL_NAME` — rejected as `invalid_input` at strict Zod parse.
-- Privacy denylist on the proxy: 14 forbidden field names (reflection body, Apple identity, DeviceActivity tokens, precise timestamps, screenshots, etc.) rejected before any provider call.
-- Wrangler v4. 77 / 77 proxy tests passing.
+- Privacy denylist on the proxy: 14 forbidden field names (reflection body, Apple identity, DeviceActivity tokens, precise timestamps, screenshots, etc.) rejected before any provider call. **Phase 6E-B added 5 more trail-specific denylist entries** (`reflection_body`, `engagement_note`, `engagement_history`, `root_engagement_id`, `root_engaged_at`).
+- Two endpoints: `POST /v1/recommendation` (6B, Daily Direct) and `POST /v1/trail` (6E-B, AI rabbit-hole trails). Both speak snake_case JSON, both reuse the same Cloudflare Worker, both reject `model` / `model_name` / `MODEL_NAME` at strict parse.
+- Wrangler v4. Proxy tests passing.
 
-iOS AI pipeline:
-- `AIProxyHTTPClient` — single-attempt HTTP client matching the existing `AIRecommendationResolver.callProxy` closure seam.
+iOS AI pipeline — Daily Direct (Phase 6B/6C/6D):
+- `AIProxyHTTPClient` — single-attempt HTTP client. `call(_:)` for the `/v1/recommendation` Daily Direct endpoint; `callTrail(_:)` for `/v1/trail` (Phase 6E-C).
 - `DailyDirectLoader` — composes the request from personal v1 interest seeds (`Apple`, `Machine Learning`, `AI`, `Neuroscience`, `Software Engineering`).
-- `AIEnvironment` — single source of truth for the dev Worker URL.
+- `AIEnvironment` — single source of truth for the dev Worker URL. Two presets: `dailyDirect` (recommendation) and `trail` (rabbit-hole trails) — both point at the same Cloudflare Worker.
 - `DailyDirectSessionStore` — per-app-session throttle (one proxy attempt per cold launch).
 - Dashboard `DailyDirectSection` — AI override card (1 card on success) vs seeded list (current 2 cards on fallback); `DailyDirectMapping` is the pure mapper.
 - SwiftData cache write-back: successful `.proxy` responses persist via `SwiftDataAIRecommendationCache.store(_:for:)` with dedup-by-`promptInputHash`.
 - 24h cache freshness: stale rows hidden from `lookup(_:)`; resolver proceeds to proxy and write-back replaces. `defaultCacheTTL = 24 * 60 * 60`.
 
+iOS AI pipeline — Rabbit Hole Trails (Phase 6E end-to-end loop, shipped):
+- `AITrailRequest` (final class, ARM64e-safe) + `AITrailResponse` / `AITrailStep` Codables (6E-C).
+- `AITrailRequestBuilder` — pure builder that extracts only the allowlisted fields from a `CuriosityEngagement` (title, methodSlug, coarse recency bucket); never reads `note`, `reflection`, `id`, `sourceURL`, `topic`, `prompt`, or raw `engagedAt`. Builds an `AITrailRequest`. Used by `TrailPreviewSheet` (6E-D2).
+- `AITrailMaterializer` — pure side-effect helper that turns an accepted `AITrailResponse` + root `CuriosityEngagement` into one `.aiDeepened` `RabbitHoleThread` + N step `CuriosityEngagement` rows in a single transaction, per `docs/RABBIT_HOLE_THREADS.md §6`. Steps whose `type` doesn't map to a canonical method slug (`article→read`, `video→watch`, `question/reflection→reflect`, `topic→deep-dive`) are dropped, not coerced. Returns nil and writes nothing if zero valid steps remain. Handles Branch A (unthreaded root → attached) vs Branch B (already-threaded root → new thread carries `seedTopic`/`seedPrompt`) for race protection (6E-D1).
+- `RabbitHoleThread` schema additions (6E-D1): `seedTopic: CuriosityTopic?` and `seedPrompt: CuriosityPrompt?`, both nullable, default nil. SwiftData lightweight migration handles this automatically; cold-launch sanity check verified.
+- `LooseEndRow` (6E-D2): now renders two pills — `[deepen]` (paper-cream, opens `TrailPreviewSheet`) sibling to existing `[thread?]` (yellow, opens `AttachToThreadSheet`).
+- `TrailPreviewSheet` (6E-D2): state machine `.loading` / `.success(response)` / `.failure`. On appear, fires one `callTrail` request via a single-hop MainActor→URLSession→MainActor pattern (matches the post-ARM64e-fix Daily Direct path). Success state renders trail title + optional summary + 3–5 step rows (type chip, title, rationale, optional `↗ link` indicator, optional minutes) + `[accept trail]` CTA. Accept invokes `AITrailMaterializer.materialize` then `dismiss()`. Failure offers `[try again]` (re-fires the load). Cancel / drag-dismiss in any state writes nothing.
+- End-to-end flow: log a loose rabbit hole → tap `deepen` → iOS calls Cloudflare Worker `/v1/trail` → DeepSeek returns bounded 3–5 step trail → user reviews `TrailPreviewSheet` → user taps `accept trail` → app materializes one `.aiDeepened` `RabbitHoleThread` + step engagements → root loose end disappears from loose-ends list (if Branch A attached it) → new thread visible in the overview.
+
 Tests at last checkpoint:
-- **184 / 184 passing across 22 suites** after Phase 6D-E (iOS).
-- **77 / 77 passing in the proxy repo** post-DeepSeek + OpenRouter allowlist.
+- **332 / 332 passing across iOS suites** after Phase 6E-D2 (post-clean-build count fluctuates 326–334 because of the conditionally-skipped Keychain suite; zero failures).
+- Proxy tests passing in the sibling repo post-6E-B `/v1/trail` endpoint (counts maintained in the proxy repo's README).
 
 ## Privacy posture
 
@@ -190,8 +200,9 @@ Hard rules:
 
 ## Likely next slices (proposed, not started)
 
-- **Phase 6E** — AI-deepened rabbit-hole trails. Persists an accepted trail as one `.aiDeepened` `RabbitHoleThread` with N engagements per `docs/RABBIT_HOLE_THREADS.md §6`. **Recommended next.** Has no FamilyControls dependency.
-- **Thread-detail polish** — small slice options: surface `thread.summary` in the preview sheet (currently persisted by RH3-D but not displayed); or a dedicated thread-detail screen with edit/close affordances; or a "and N more arc/arcs" overflow tap to a paginated list. Low risk, no schema impact. Alternative to Phase 6E if you want a smaller next step.
+- **Phase 6E-E** — Seeded `TopicTrail` fallback for proxy-unavailable. May require a seed-content audit if `seed/curiosity_seed_v1.json`'s coverage is too thin. Smallest remaining 6E work.
+- **Phase 6E-F** — Additional trail triggers (from Daily Direct card; from existing thread "extend with AI"). Deferred until 6E quality is validated in real use.
+- **Thread-detail polish** — small slice options: surface `thread.summary` in the preview sheet (currently persisted by RH3-D + 6E-D1 but not displayed in `ThreadPreviewSheet`); a dedicated thread-detail screen with edit/close affordances; an "and N more arc/arcs" overflow tap to a paginated list. Low risk, no schema impact.
 - **RH4** (canonical) — re:tuals back-face groups engagements by thread (read-only). Depends on RH2 (done).
 - **RH5** (canonical) — Dashboard "continue an open thread" Daily Direct variant. Local-only selection; no proxy contract change. Depends on RH3 / Phase 6E.
 - **Phase 7B** — DeviceActivity feasibility spike. **Parked**, pending Apple Developer Program + Family Controls entitlement access. Resume only on explicit user signal.
@@ -202,5 +213,5 @@ Hard rules:
 
 1. Run `git status --short`. Confirm only the known Xcode local drifts are unstaged (if present): `re_direct.xcodeproj/project.pbxproj` (signing) and/or `re_direct.xcodeproj/xcshareddata/xcschemes/re_direct.xcscheme` (debug diagnostics). No other working-tree changes expected. Confirm `origin/main` is in sync.
 2. Read the docs listed under **Read first**, especially `docs/AI_INTEGRATION_PLAN.md`, `docs/REFLECTION_ARCHITECTURE.md`, and this file.
-3. Default next action: **propose Phase 6E** — AI-deepened rabbit-hole trail persistence per `docs/RABBIT_HOLE_THREADS.md §6`. Alternative: a small thread-detail polish slice (e.g. surface `thread.summary` in the preview sheet). The design-plan RH3-B/C/D/E series (canonical RH2) is done. Do not start coding until the user approves the slice scope.
-4. Stop and ask if the user redirects to something else (e.g. Slice 7.1, a thread-detail polish slice, RH4 / RH5, or resuming Phase 7B).
+3. Default next action: **wait for the user to direct.** The Phase 6E end-to-end AI-deepened trail loop is shipped (through 6E-D2). Plausible next slices: Phase 6E-E (seeded fallback), Phase 6E-F (additional triggers), thread-detail polish (surface `thread.summary` in the preview sheet), RH4 (re:tuals thread grouping), RH5 (Dashboard continue-thread), Slice 7.1 (Apple Sign-In), REF3 (post-ritual reflection), or unparking Phase 7B.
+4. Do not start coding until the user approves the slice scope.

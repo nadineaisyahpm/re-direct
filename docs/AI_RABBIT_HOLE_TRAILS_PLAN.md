@@ -298,15 +298,18 @@ Same shape as `/v1/recommendation`'s `AIProxyError` cases — `invalid_input`, `
 
 ## 10. Slice sequence
 
-| Slice | Goal | Touches | Depends on |
-|---|---|---|---|
-| **6E-A** | **This document.** Locks trigger, payload, persistence bridge, fallback, cost controls, slice sequence. | `docs/AI_RABBIT_HOLE_TRAILS_PLAN.md` (new); optional ROADMAP refresh | — |
-| **6E-B** | Proxy `/v1/trail` endpoint: handler, Zod validation, denylist extension, provider adapter for trail prompts, response normalization, tests. **Proxy repo only, no iOS code.** | `re_direct_ai_proxy/src/handlers/trail.ts`, `src/validation/*`, `src/providers/*`, tests | 6E-A |
-| **6E-C** | iOS DTOs + HTTP client: `TrailRequestPayload` (privacy-safe value type), `TrailResponse` + `TrailStep` Codables, `AIProxyHTTPClient.callTrail(_:)` method, JSON-serialization path mirroring the Daily Direct hardening. Tests for encode/decode, allowlist key set, forbidden fields absent. **No UI.** | `re_direct/AITrail*.swift` (new), `re_direct/AIProxyHTTPClient.swift` (extend), tests | 6E-B |
-| **6E-D** | UI: `deepen` affordance on `LooseEndRow`, `TrailSheet` (transient response + step list), accept/cancel, materialization helper (`TrailMaterializer`) implementing the §6 bridge. Tests for materializer (thread + N engagements, no engagements when canceled, root-engagement linking). | `re_direct/RabbitHoleView.swift` (extend), tests | 6E-C |
-| **6E-E** | Seeded `TopicTrail` fallback: when proxy unavailable, render a matching seeded trail for the root's topic if one exists; otherwise empty state. | `re_direct/RabbitHoleView.swift` (extend), seed schema check | 6E-D |
+**Status as of this revision:** the end-to-end Phase 6E loop is shipped through **6E-D2**. 6E-D was split into two sub-slices during implementation (D1 = pure materializer + schema additions; D2 = the UI and request builder) to keep each PR small and individually verifiable. The status column below reflects that split.
 
-**6E-F (deferred)** — additional triggers (from Daily Direct card; from existing thread "extend with AI"). Out of scope for the first 6E release; revisit after 6E-D ships and trail quality is validated.
+| Slice | Goal | Touches | Status |
+|---|---|---|---|
+| **6E-A** | **This document.** Locks trigger, payload, persistence bridge, fallback, cost controls, slice sequence. | `docs/AI_RABBIT_HOLE_TRAILS_PLAN.md` (new); optional ROADMAP refresh | **done** |
+| **6E-B** | Proxy `/v1/trail` endpoint: handler, Zod validation, denylist extension, provider adapter for trail prompts, response normalization, tests. **Proxy repo only, no iOS code.** | `re_direct_ai_proxy/src/handlers/trail.ts`, `src/validation/*`, `src/providers/*`, tests | **done** (deployed) |
+| **6E-C** | iOS DTOs + HTTP client: `AITrailRequest` (final class for ARM64e safety), `AITrailResponse` + `AITrailStep` Codables, `AIProxyHTTPClient.callTrail(_:)` method, JSON-serialization path mirroring the Daily Direct hardening. 19 tests for encode/decode, allowlist key set, forbidden fields absent. **No UI.** | `re_direct/AITrailRequest.swift`, `re_direct/AITrailResponse.swift`, `re_direct/AIEnvironment.swift` (extend), `re_direct/AIProxyHTTPClient.swift` (extend), tests | **done** |
+| **6E-D1** | Pure materializer: `AITrailMaterializer` turns an accepted `AITrailResponse` + root `CuriosityEngagement` into one `.aiDeepened` `RabbitHoleThread` + N step `CuriosityEngagement` rows in a single transaction. Branch A (root unthreaded → attached) vs Branch B (root already threaded → new thread carries `seedTopic`/`seedPrompt` from the root). Schema additive: `RabbitHoleThread.seedTopic` + `seedPrompt`, both nullable, default nil. 30 tests. No UI. | `re_direct/AITrailMaterializer.swift` (new), `re_direct/Models/Engagement/RabbitHoleThread.swift` (extend) | **done** |
+| **6E-D2** | UI: `deepen` affordance on `LooseEndRow` (sibling to existing `thread?` pill). `TrailPreviewSheet` state machine `.loading / .success / .failure`. `AITrailRequestBuilder` pure helper builds the request from only allowlisted fields. Single-hop MainActor→URLSession→MainActor pattern. Accept invokes the 6E-D1 materializer. 18 tests. | `re_direct/AITrailRequestBuilder.swift` (new), `re_direct/RabbitHoleView.swift` (extend), tests | **done** |
+| **6E-E** | Seeded `TopicTrail` fallback: when proxy unavailable, render a matching seeded trail for the root's topic if one exists; otherwise the existing quiet "couldn't fetch a trail just now." copy + `try again`. May require a seed-content audit. | `re_direct/RabbitHoleView.swift` (extend), seed schema check | proposed, depends on 6E-D2 |
+
+**6E-F (deferred)** — additional triggers (from Daily Direct card; from existing thread "extend with AI"). Revisit after Phase 6E quality is validated in real use.
 
 ---
 

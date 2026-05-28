@@ -256,7 +256,7 @@ For surfaces that need a *result* even if AI is disabled, step 3 is the canonica
 
 ### Phase 6E — Rabbit-Hole Deepening / Guided Trail
 
-**Status**: proposed.
+**Status**: **shipped end-to-end through 6E-D2.** Full plan + sub-slice breakdown lives in `docs/AI_RABBIT_HOLE_TRAILS_PLAN.md`. Remaining: 6E-E (seeded fallback, proposed) and 6E-F (additional triggers, deferred). The conceptual brief below is preserved as historical context — the implementation details have moved to the trails plan.
 
 **Purpose**: when a user logs a rabbit hole (e.g. "bioluminescence"), AI suggests an **intentional, bounded next-step trail** — one article, one video, one question, one reflection prompt, one deeper adjacent topic. The metaphor: Alice in Wonderland, but with a map.
 
