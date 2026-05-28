@@ -413,4 +413,386 @@ struct AIProxyHTTPClientTests {
             }
         }
     }
+
+    // ─────────────────────────────────────────
+    // MARK: - Phase 6E-C: callTrail
+    // ─────────────────────────────────────────
+    //
+    // Trail tests live in this suite (not a separate suite) because both
+    // suites share `AIProxyURLProtocolMock`'s static handler state — and
+    // `.serialized` only sequences within a single suite, not across
+    // suites. Cross-suite parallelism would race the mock handler. Keep
+    // all `AIProxyURLProtocolMock` users under this one `.serialized`
+    // umbrella.
+
+    // Trail fixtures
+    private func makeValidTrailRequest() -> AITrailRequest {
+        AITrailRequest(
+            locale: "en-US",
+            rootTitle: "bioluminescence",
+            rootMethodSlug: "read",
+            rootRecencyBucket: "today",
+            interestSeeds: ["Apple", "Machine Learning", "Neuroscience"],
+            seededTopicSlugs: ["bioluminescence"],
+            maxSteps: 5,
+            providerPreference: .auto
+        )
+    }
+
+    private func makeTrailHTTPResponse(status: Int) -> HTTPURLResponse {
+        HTTPURLResponse(
+            url: testProxyURL.appendingPathComponent("v1/trail"),
+            statusCode: status,
+            httpVersion: "HTTP/1.1",
+            headerFields: ["content-type": "application/json"]
+        )!
+    }
+
+    private func makeTrailSuccessPayload(stepCount: Int = 3) -> Data {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let steps: [String] = (1...stepCount).map { i in
+            // Alternate between media (with URL + minutes) and question
+            // (null URL + null minutes) to exercise the optional decode.
+            let isMedia = (i % 2) == 1
+            let urlLiteral = isMedia ? "\"https://example.com/step\(i)\"" : "null"
+            let type = isMedia ? "article" : "question"
+            return """
+            {
+              "type": "\(type)",
+              "title": "Step \(i) title",
+              "rationale": "Rationale for step \(i).",
+              "url": \(urlLiteral),
+              "estimated_minutes": \(isMedia ? "\(i * 3)" : "null")
+            }
+            """
+        }
+        let stepsJSON = steps.joined(separator: ",\n")
+        return """
+        {
+          "id": "01HZX1...",
+          "title": "What the deep sea remembers",
+          "summary": "A short trail from bioluminescence into deeper places.",
+          "root_title": "bioluminescence",
+          "steps": [\(stepsJSON)],
+          "provider": "deepseek",
+          "model_version": "deepseek-v4-flash",
+          "prompt_input_hash": "f3a1abc",
+          "cached": false,
+          "created_at": "\(now)"
+        }
+        """.data(using: .utf8)!
+    }
+
+    // MARK: encoding / allowlist
+
+    @Test func trailEncodedBodyContainsAllowlistedKeys() throws {
+        let body = try AIProxyHTTPClient.encodeTrailBody(makeValidTrailRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        #expect(object["locale"] != nil)
+        #expect(object["root_title"] != nil)
+        #expect(object["root_method_slug"] != nil)
+        #expect(object["root_recency_bucket"] != nil)
+        #expect(object["interest_seeds"] != nil)
+        #expect(object["provider_preference"] != nil)
+        #expect(object["seeded_topic_slugs"] != nil)
+        #expect(object["max_steps"] != nil)
+    }
+
+    @Test func trailEncodedBodyHasExactExpectedKeySetWithOptionals() throws {
+        let body = try AIProxyHTTPClient.encodeTrailBody(makeValidTrailRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        let expected: Set<String> = [
+            "locale", "root_title", "root_method_slug", "root_recency_bucket",
+            "interest_seeds", "seeded_topic_slugs", "max_steps", "provider_preference",
+        ]
+        #expect(Set(object.keys) == expected)
+    }
+
+    @Test func trailEncodedBodyOmitsSeededTopicSlugsWhenNil() throws {
+        let request = AITrailRequest(
+            locale: "en-US",
+            rootTitle: "x",
+            rootMethodSlug: "read",
+            rootRecencyBucket: "today",
+            interestSeeds: ["AI"],
+            seededTopicSlugs: nil,
+            maxSteps: nil,
+            providerPreference: .auto
+        )
+        let body = try AIProxyHTTPClient.encodeTrailBody(request)
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        #expect(object["seeded_topic_slugs"] == nil)
+        #expect(object["max_steps"] == nil)
+    }
+
+    @Test func trailEncodedBodyIncludesSeededTopicSlugsWhenSet() throws {
+        let body = try AIProxyHTTPClient.encodeTrailBody(makeValidTrailRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        let slugs = try #require(object["seeded_topic_slugs"] as? [String])
+        #expect(slugs == ["bioluminescence"])
+    }
+
+    @Test func trailEncodedBodyIncludesMaxStepsWhenSet() throws {
+        let body = try AIProxyHTTPClient.encodeTrailBody(makeValidTrailRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        let maxSteps = try #require(object["max_steps"] as? NSNumber)
+        #expect(maxSteps.intValue == 5)
+    }
+
+    @Test func trailProviderPreferenceEncodesAsAuto() throws {
+        let body = try AIProxyHTTPClient.encodeTrailBody(makeValidTrailRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        let pref = try #require(object["provider_preference"] as? String)
+        #expect(pref == "auto")
+    }
+
+    @Test func trailEncodedBodyValueTypesArePrimitiveJSON() throws {
+        let body = try AIProxyHTTPClient.encodeTrailBody(makeValidTrailRequest())
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: body, options: []) as? [String: Any]
+        )
+        #expect(object["locale"] is String)
+        #expect(object["root_title"] is String)
+        #expect(object["root_method_slug"] is String)
+        #expect(object["root_recency_bucket"] is String)
+        #expect(object["interest_seeds"] is [String])
+        #expect(object["seeded_topic_slugs"] is [String])
+        #expect(object["max_steps"] is NSNumber)
+        #expect(object["provider_preference"] is String)
+    }
+
+    // MARK: privacy / denylist
+
+    @Test func trailEncodedBodyDoesNotIncludeForbiddenFields() throws {
+        let body = try AIProxyHTTPClient.encodeTrailBody(makeValidTrailRequest())
+        let json = try #require(String(data: body, encoding: .utf8))
+
+        // Per docs/AI_RABBIT_HOLE_TRAILS_PLAN.md §5.
+        for forbidden in [
+            // RH-trails-specific denylist additions
+            "reflection_body", "reflectionBody",
+            "engagement_note", "engagementNote",
+            "engagement_history", "engagementHistory",
+            "root_engagement_id", "rootEngagementId",
+            "root_engaged_at", "rootEngagedAt",
+            // Inherited AI denylist
+            "apple_user_id", "appleUserId", "user_id",
+            "device_activity_token", "deviceActivityToken",
+            "family_activity_token",
+            "engaged_at", "started_at", "precise_timestamp",
+            "screenshot", "proof_image",
+            // Cost-control denylist
+            "model", "model_name", "MODEL_NAME",
+        ] {
+            #expect(!json.contains("\"\(forbidden)\""),
+                    "encoded JSON unexpectedly contains \(forbidden)")
+        }
+    }
+
+    // MARK: URL / headers
+
+    @Test func trailRequestURLAndMethod() throws {
+        let client = AIProxyHTTPClient(config: testConfig)
+        let urlRequest = try client.makeTrailURLRequest(for: makeValidTrailRequest())
+
+        #expect(urlRequest.httpMethod == "POST")
+        #expect(urlRequest.url?.absoluteString == "https://proxy.test.invalid/v1/trail")
+        #expect(urlRequest.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(urlRequest.value(forHTTPHeaderField: "Accept") == "application/json")
+        #expect(urlRequest.timeoutInterval == 5)
+        // No Authorization header — the iOS app never carries the provider key.
+        #expect(urlRequest.value(forHTTPHeaderField: "Authorization") == nil)
+    }
+
+    @Test func trailEnvironmentReusesDailyDirectURL() {
+        // The trail endpoint hits the same Cloudflare Worker as Daily Direct.
+        #expect(AIEnvironment.trail.baseURL == AIEnvironment.dailyDirect.baseURL)
+    }
+
+    // MARK: happy path / decode
+
+    @Test func trailDecodesSuccessfulResponseThreeSteps() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let payload = makeTrailSuccessPayload(stepCount: 3)
+        AIProxyURLProtocolMock.handler = { _ in (self.makeTrailHTTPResponse(status: 200), payload) }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        let response = try await client.callTrail(makeValidTrailRequest())
+
+        #expect(response.provider == "deepseek")
+        #expect(response.modelVersion == "deepseek-v4-flash")
+        #expect(response.steps.count == 3)
+        #expect(response.title == "What the deep sea remembers")
+        #expect(response.summary?.isEmpty == false)
+        #expect(response.rootTitle == "bioluminescence")
+        #expect(response.cached == false)
+        #expect(response.promptInputHash == "f3a1abc")
+    }
+
+    @Test func trailDecodesSuccessfulResponseFiveSteps() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let payload = makeTrailSuccessPayload(stepCount: 5)
+        AIProxyURLProtocolMock.handler = { _ in (self.makeTrailHTTPResponse(status: 200), payload) }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        let response = try await client.callTrail(makeValidTrailRequest())
+        #expect(response.steps.count == 5)
+    }
+
+    @Test func trailDecodesStepWithNullURL() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let payload = makeTrailSuccessPayload(stepCount: 3)
+        AIProxyURLProtocolMock.handler = { _ in (self.makeTrailHTTPResponse(status: 200), payload) }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        let response = try await client.callTrail(makeValidTrailRequest())
+
+        let questionStep = try #require(response.steps.first { $0.type == "question" })
+        #expect(questionStep.url == nil)
+        #expect(questionStep.estimatedMinutes == nil)
+        #expect(!questionStep.title.isEmpty)
+        #expect(!questionStep.rationale.isEmpty)
+    }
+
+    @Test func trailMockSeesBodyWithoutForbiddenFields() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        AIProxyURLProtocolMock.handler = { _ in
+            (self.makeTrailHTTPResponse(status: 200), self.makeTrailSuccessPayload(stepCount: 3))
+        }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        _ = try await client.callTrail(makeValidTrailRequest())
+
+        let captured = try #require(AIProxyURLProtocolMock.captured.first)
+        let body = readBody(of: captured)
+        let json = try #require(String(data: body, encoding: .utf8))
+
+        #expect(json.contains("\"root_title\""))
+        #expect(json.contains("\"root_method_slug\""))
+        #expect(!json.contains("reflection_body"))
+        #expect(!json.contains("engagement_note"))
+        #expect(!json.contains("engagement_history"))
+        #expect(!json.contains("apple_user_id"))
+        #expect(!json.contains("device_activity_token"))
+        #expect(!json.contains("\"model\""))
+    }
+
+    // MARK: error mapping
+
+    @Test func trailMapsInvalidInputWireError() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let body = """
+        {"error":{"code":"invalid_input","message":"root_title required"}}
+        """.data(using: .utf8)!
+        AIProxyURLProtocolMock.handler = { _ in (self.makeTrailHTTPResponse(status: 400), body) }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        await #expect(throws: AIProxyError.invalidInput(message: "root_title required")) {
+            try await client.callTrail(makeValidTrailRequest())
+        }
+    }
+
+    @Test func trailMapsRateLimitedWithRetryAfter() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let body = """
+        {"error":{"code":"rate_limited","message":"slow down","retry_after_seconds":42}}
+        """.data(using: .utf8)!
+        AIProxyURLProtocolMock.handler = { _ in (self.makeTrailHTTPResponse(status: 429), body) }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        do {
+            _ = try await client.callTrail(makeValidTrailRequest())
+            Issue.record("Expected throw")
+        } catch let error as AIProxyError {
+            if case .rateLimited(let retry) = error {
+                #expect(retry == 42)
+            } else {
+                Issue.record("Expected .rateLimited but got \(error)")
+            }
+        }
+    }
+
+    @Test func trailMapsUpstreamFailedTriggersSeededFallback() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let body = """
+        {"error":{"code":"upstream_failed","message":"too few valid steps"}}
+        """.data(using: .utf8)!
+        AIProxyURLProtocolMock.handler = { _ in (self.makeTrailHTTPResponse(status: 502), body) }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        do {
+            _ = try await client.callTrail(makeValidTrailRequest())
+            Issue.record("Expected throw")
+        } catch let error as AIProxyError {
+            #expect(error == .upstreamFailed)
+            #expect(error.triggersSeededFallback)
+        }
+    }
+
+    @Test func trailMapsProxyUnavailable() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let body = """
+        {"error":{"code":"proxy_unavailable","message":"No provider configured"}}
+        """.data(using: .utf8)!
+        AIProxyURLProtocolMock.handler = { _ in (self.makeTrailHTTPResponse(status: 503), body) }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        await #expect(throws: AIProxyError.proxyUnavailable) {
+            try await client.callTrail(makeValidTrailRequest())
+        }
+    }
+
+    @Test func trailTransportFailureFromMockMapsToNetwork() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        do {
+            _ = try await client.callTrail(makeValidTrailRequest())
+            Issue.record("Expected throw")
+        } catch let error as AIProxyError {
+            if case .network = error {
+                // ok
+            } else {
+                Issue.record("Expected .network but got \(error)")
+            }
+        }
+    }
 }

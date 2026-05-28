@@ -29,4 +29,13 @@ enum AIEnvironment {
     static var dailyDirect: AIProxyConfig {
         AIProxyConfig(baseURL: dailyDirectProxyURL)
     }
+
+    /// `AIProxyConfig` preset for the AI rabbit-hole trail call site
+    /// (Phase 6E). Same Cloudflare Worker as `dailyDirect`; the endpoint
+    /// path (`/v1/trail`) is appended by `AIProxyHTTPClient.callTrail`.
+    /// Kept as a separate accessor so future slices can diverge timeouts
+    /// or base URLs per surface without touching call sites.
+    static var trail: AIProxyConfig {
+        AIProxyConfig(baseURL: dailyDirectProxyURL)
+    }
 }

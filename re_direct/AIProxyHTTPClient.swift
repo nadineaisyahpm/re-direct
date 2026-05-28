@@ -148,4 +148,109 @@ struct AIProxyHTTPClient: Sendable {
             return .network(message: error.localizedDescription)
         }
     }
+
+    // ─────────────────────────────────────────
+    // MARK: - Phase 6E-C: AI trail endpoint
+    // ─────────────────────────────────────────
+
+    /// Single-attempt call to `POST {baseURL}/v1/trail`.
+    ///
+    /// Mirror of `call(_:)` but speaks the `AITrailRequest` /
+    /// `AITrailResponse` contract from `docs/AI_RABBIT_HOLE_TRAILS_PLAN.md §9`.
+    /// Network/error handling is **duplicated**, not refactored — the
+    /// generic helper would change call(_:)'s codegen, and call(_:) is
+    /// the known-good ARM64e-safe path. Keep them parallel.
+    func callTrail(_ request: AITrailRequest) async throws -> AITrailResponse {
+        let urlRequest = try makeTrailURLRequest(for: request)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: urlRequest)
+        } catch let urlError as URLError {
+            throw Self.mapURLError(urlError)
+        } catch {
+            throw AIProxyError.network(message: error.localizedDescription)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw AIProxyError.network(message: "Non-HTTP response from proxy")
+        }
+
+        if (200..<300).contains(http.statusCode) {
+            do {
+                return try JSONDecoder.aiProxy.decode(AITrailResponse.self, from: data)
+            } catch {
+                throw AIProxyError.decoding
+            }
+        }
+
+        throw AIProxyError.from(status: http.statusCode, data: data)
+    }
+
+    /// Builds the outbound trail `URLRequest`. Extracted so tests can
+    /// inspect the encoded body without spinning up `URLSession`.
+    func makeTrailURLRequest(for request: AITrailRequest) throws -> URLRequest {
+        let url = config.baseURL.appendingPathComponent("v1/trail")
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.timeoutInterval = config.timeoutSeconds
+        urlRequest.httpBody = try Self.encodeTrailBody(request)
+        return urlRequest
+    }
+
+    /// Pure JSON encoding for the trail request.
+    ///
+    /// Same hardening as `encodeBody(_:)` for recommendations:
+    /// 1. Read every field into Swift-native locals **before** any
+    ///    `[String: Any]` literal is constructed — Swift→ObjC bridging
+    ///    at the literal site historically left struct/class Optional
+    ///    payload pointers in invalid states on ARM64e device codegen.
+    /// 2. Build the allowlisted dictionary from locals only.
+    /// 3. Encode via `JSONSerialization` (not `JSONEncoder`) to
+    ///    sidestep generic Codable machinery that pauses/crashes
+    ///    on-device.
+    ///
+    /// **Privacy invariant** (`docs/AI_RABBIT_HOLE_TRAILS_PLAN.md §5`):
+    /// the keys below are the only fields that may ever leave the
+    /// device on a trail request. Adding a new outbound field requires
+    /// updating both the plan doc and the proxy's denylist.
+    static func encodeTrailBody(_ request: AITrailRequest) throws -> Data {
+        let locale              = request.locale
+        let rootTitle           = request.rootTitle
+        let rootMethodSlug      = request.rootMethodSlug
+        let rootRecencyBucket   = request.rootRecencyBucket
+        let interestSeeds       = request.interestSeeds
+        let seededTopicSlugs    = request.seededTopicSlugs
+        let maxSteps            = request.maxSteps
+        let providerPrefRaw     = request.providerPreference.rawValue
+
+        var json: [String: Any] = [
+            "locale": locale,
+            "root_title": rootTitle,
+            "root_method_slug": rootMethodSlug,
+            "root_recency_bucket": rootRecencyBucket,
+            "interest_seeds": interestSeeds,
+            "provider_preference": providerPrefRaw,
+        ]
+        // Optional fields are omitted entirely when nil, matching the
+        // Daily Direct hardened path's mood-when-nil semantics.
+        if let seededTopicSlugs {
+            json["seeded_topic_slugs"] = seededTopicSlugs
+        }
+        if let maxSteps {
+            json["max_steps"] = maxSteps
+        }
+
+        do {
+            return try JSONSerialization.data(
+                withJSONObject: json,
+                options: [.sortedKeys]
+            )
+        } catch {
+            throw AIProxyError.decoding
+        }
+    }
 }
