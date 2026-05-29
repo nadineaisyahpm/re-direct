@@ -33,9 +33,11 @@ enum AIEnvironment {
     /// `AIProxyConfig` preset for the AI rabbit-hole trail call site
     /// (Phase 6E). Same Cloudflare Worker as `dailyDirect`; the endpoint
     /// path (`/v1/trail`) is appended by `AIProxyHTTPClient.callTrail`.
-    /// Kept as a separate accessor so future slices can diverge timeouts
-    /// or base URLs per surface without touching call sites.
+    ///
+    /// Timeout is 35s — the proxy's trail route ceiling is 28s (raised from
+    /// 8s in fix/trail 4803f16), so iOS needs headroom beyond that for
+    /// network + TLS jitter. Daily Direct keeps its 20s default separately.
     static var trail: AIProxyConfig {
-        AIProxyConfig(baseURL: dailyDirectProxyURL)
+        AIProxyConfig(baseURL: dailyDirectProxyURL, timeoutSeconds: 35)
     }
 }

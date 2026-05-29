@@ -25,6 +25,13 @@ struct AIEnvironmentTests {
         #expect(AIEnvironment.dailyDirect.timeoutSeconds == 20)
     }
 
+    @Test func trailConfigUsesLongerTimeout() {
+        // Trail proxy ceiling is 28s (proxy fix 4803f16); iOS must allow
+        // headroom beyond that. Daily Direct keeps its 20s default.
+        #expect(AIEnvironment.trail.timeoutSeconds == 35)
+        #expect(AIEnvironment.dailyDirect.timeoutSeconds == 20)
+    }
+
     @Test func dailyDirectURLHostIsCloudflareWorkers() {
         // The hostname must be the Cloudflare Worker subdomain —
         // never a vendor (DeepSeek, OpenRouter, OpenAI, Anthropic) direct

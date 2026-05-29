@@ -621,6 +621,17 @@ struct AIProxyHTTPClientTests {
         #expect(AIEnvironment.trail.baseURL == AIEnvironment.dailyDirect.baseURL)
     }
 
+    @Test func trailURLRequestTimeoutMatchesTrailEnvironmentConfig() throws {
+        // The trail config carries a longer timeout than Daily Direct because
+        // the proxy needs up to 28s to generate a 3–5 step trail. iOS must
+        // allow headroom beyond that (35s) or the URLSession fires before the
+        // proxy finishes and the user sees a spurious failure.
+        let client = AIProxyHTTPClient(config: AIEnvironment.trail)
+        let urlRequest = try client.makeTrailURLRequest(for: makeValidTrailRequest())
+        #expect(urlRequest.timeoutInterval == AIEnvironment.trail.timeoutSeconds)
+        #expect(urlRequest.timeoutInterval >= 30)
+    }
+
     // MARK: happy path / decode
 
     @Test func trailDecodesSuccessfulResponseThreeSteps() async throws {
