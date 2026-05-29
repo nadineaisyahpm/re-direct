@@ -483,6 +483,38 @@ struct AIProxyHTTPClientTests {
         """.data(using: .utf8)!
     }
 
+    private func makeTrailSuccessPayloadWithDate(_ dateString: String, stepCount: Int = 3) -> Data {
+        let steps: [String] = (1...stepCount).map { i in
+            let isMedia = (i % 2) == 1
+            let urlLiteral = isMedia ? "\"https://example.com/step\(i)\"" : "null"
+            let type = isMedia ? "article" : "question"
+            return """
+            {
+              "type": "\(type)",
+              "title": "Step \(i)",
+              "rationale": "Because.",
+              "url": \(urlLiteral),
+              "estimated_minutes": \(isMedia ? "8" : "null")
+            }
+            """
+        }
+        let stepsJSON = steps.joined(separator: ",\n")
+        return """
+        {
+          "id": "01TEST",
+          "title": "What the deep sea remembers",
+          "summary": "A test trail.",
+          "root_title": "bioluminescence",
+          "steps": [\(stepsJSON)],
+          "provider": "deepseek",
+          "model_version": "deepseek-v4-flash",
+          "prompt_input_hash": "f3a1abc",
+          "cached": false,
+          "created_at": "\(dateString)"
+        }
+        """.data(using: .utf8)!
+    }
+
     // MARK: encoding / allowlist
 
     @Test func trailEncodedBodyContainsAllowlistedKeys() throws {
@@ -684,6 +716,54 @@ struct AIProxyHTTPClientTests {
         #expect(questionStep.estimatedMinutes == nil)
         #expect(!questionStep.title.isEmpty)
         #expect(!questionStep.rationale.isEmpty)
+    }
+
+    /// Regression: proxy emits `toISOString()` which includes fractional
+    /// seconds ("2026-05-29T17:14:23.901Z"). Swift's built-in `.iso8601`
+    /// strategy omits `.withFractionalSeconds`, causing a decode failure
+    /// that surfaces as `TrailPreviewSheet` always showing the failure
+    /// state. `JSONDecoder.aiProxy` must handle fractional-second dates.
+    @Test func trailDecodesCreatedAtWithFractionalSeconds() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        // Fractional-seconds format: what Node's toISOString() emits.
+        let fractionalISO = "2026-05-29T17:14:23.901Z"
+        let payload = makeTrailSuccessPayloadWithDate(fractionalISO, stepCount: 3)
+        AIProxyURLProtocolMock.handler = { _ in (self.makeTrailHTTPResponse(status: 200), payload) }
+
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        // This must not throw AIProxyError.decoding.
+        let response = try await client.callTrail(makeValidTrailRequest())
+        #expect(response.steps.count == 3)
+    }
+
+    @Test func recommendationDecodesCreatedAtWithFractionalSeconds() async throws {
+        AIProxyURLProtocolMock.reset()
+        let session = AIProxyURLProtocolMock.makeSession()
+        defer { AIProxyURLProtocolMock.reset() }
+
+        let fractionalISO = "2026-05-29T17:14:23.901Z"
+        let payload = """
+        {
+          "id": "01HZX1...",
+          "topic_slug": "bioluminescence",
+          "topic_title": "Bioluminescence",
+          "prompt_body": "Find one short documentary.",
+          "suggested_minutes": 12,
+          "provider": "deepseek",
+          "model_version": "deepseek-v4-flash",
+          "prompt_input_hash": "f3a1abc",
+          "cached": false,
+          "created_at": "\(fractionalISO)"
+        }
+        """.data(using: .utf8)!
+
+        AIProxyURLProtocolMock.handler = { _ in (makeHTTPResponse(status: 200), payload) }
+        let client = AIProxyHTTPClient(config: testConfig, session: session)
+        let response = try await client.call(makeValidRequest())
+        #expect(response.topicTitle == "Bioluminescence")
     }
 
     @Test func trailMockSeesBodyWithoutForbiddenFields() async throws {
