@@ -69,19 +69,14 @@
 
 ### 🟠 P1 — High (major UX degradation)
 
-#### F4.1 — Auth state does not persist across cold launches
+*None currently open.*
 
-**Area:** 4 (onboarding / identity)  
-**Reproduction:**
-1. Complete onboarding
-2. Terminate app (cold kill)
-3. Relaunch
-4. Observe: auth/identity state not restored
-
-**Expected:** Sign-in state persists via Keychain across cold launches  
-**Actual:** Auth state resets on cold launch; user sees onboarding or unauthenticated state again  
-**Suspected location:** `re_direct/Identity/KeychainAppleIDStore.swift`, `re_direct/Identity/AppleSignInPersister.swift` — Keychain read on launch not wired, or Sign-in-with-Apple capability not enabled (Slice 7.1 deferred)  
-**Recommended fix slice:** Slice 7.1 — Apple Sign-In capability enable + end-to-end Keychain persistence verification. Manual Xcode step required (entitlement toggle).
+**F4.1** was originally classified P1 under the assumption of App Store
+distribution with multiple end users. The app is now scoped as
+single-user local-first portfolio (App Store deferred indefinitely due
+to developer-account cost). Under that scope, F4.1 has been
+reclassified to P3 below and closed via the onboarding-persistence fix
+(no Apple Sign-In, no Keychain identity — just a UserDefaults flag).
 
 ---
 
@@ -116,6 +111,15 @@
 ---
 
 ### 🟢 P3 — Low (minor / edge case)
+
+#### F4.1 (reclassified from P1) — Onboarding screen reappears on every cold launch  ✅ CLOSED 2026-05-31
+
+**Area:** 4 (onboarding / identity)
+**Original classification:** P1 HIGH, under assumption of App Store multi-user distribution.
+**Reclassification rationale:** App is scoped single-user local-first portfolio. There is no multi-user identity differentiation problem to solve, so the original "auth doesn't persist" framing doesn't apply. The actual user-visible annoyance is just "the onboarding screen reappears on every cold launch."
+**Resolution:** Replaced the always-show-OnboardingView behavior with a `@AppStorage("onboardingComplete")` flag wrapped by a new `RootView` in `re_directApp.swift`. The flag flips to `true` when the user taps any of the entry buttons in `OnboardingView` (sign up / log in / Apple Sign-In). On subsequent cold launches, `RootView` branches straight to `AppTabView`. Resets correctly on app uninstall.
+**Apple Sign-In status:** intentionally NOT activated. The button remains in the UI and the existing `AppleSignInCoordinator` + `AppleSignInPersister` + `KeychainAppleIDStore` are preserved on disk as low-cost forward compatibility, but they are not on the v1 critical path. If App Store distribution is ever pursued, Slice 7.1 (Apple Sign-In + Keychain identity) is the ready-to-resume entry point with all the contract files already in place.
+**Why UserDefaults, not Keychain:** the flag has no security requirement (anyone with the device already has full local data access), and UserDefaults correctly resets on uninstall.
 
 #### F1.3 — Core Data error log spike on first install
 
@@ -173,9 +177,9 @@
 
 1. ~~**Proxy slice** — fix F6.1 in `re_direct_ai_proxy/`.~~ **✅ Done 2026-05-30.** Root cause was iOS locale format (`en_US` vs `en-US`), not proxy timeout. Resolved across iOS commits `da1776e` + `2e6b49f` and proxy commit `a39d7de`. Contract fixture tests + iOS encoder tests added as regression armor. Areas 6, 7, 13 all closed.
 
-2. **iOS Slice 7.1** — Apple Sign-In capability enable + Keychain persistence. Closes F4.1 + F1.5 together. Requires manual Xcode entitlement step. **← Next slice.**
+2. ~~**iOS Slice 7.1** — Apple Sign-In capability enable + Keychain persistence.~~ **Deferred indefinitely.** Replaced by a 10-minute `@AppStorage("onboardingComplete")` flag (F4.1 ✅ CLOSED 2026-05-31). App is single-user local-first portfolio; Apple Sign-In was over-engineering for the actual problem. Slice 7.1 remains the resume-point if App Store distribution is ever pursued; all contract files (`AppleSignInCoordinator`, `KeychainAppleIDStore`, `AppleSignInPersister`, `UserProfile.onboardingComplete` schema slot) are preserved on disk.
 
-3. **iOS layout/copy polish slice** — F2.1 (Rabbit Hole empty state centering) + F12.2 (Settings hint truncation). Same file family (`RabbitHoleView.swift`, `SettingsView.swift`), single small commit.
+3. **iOS layout/copy polish slice** — F2.1 (Rabbit Hole empty state centering) + F12.2 (Settings hint truncation). Same file family (`RabbitHoleView.swift`, `SettingsView.swift`), single small commit. **← Next slice.**
 
 4. **iOS launch polish slice** — F1.3 (Core Data error spike on first install). Tiny change in `re_directApp.swift`.
 

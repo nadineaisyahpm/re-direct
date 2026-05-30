@@ -7,7 +7,20 @@ import SwiftData
 
 struct OnboardingView: View {
 
-    @State private var showDashboard = false
+    // Persisted across cold launches. Flipping this to `true` causes the
+    // RootView in re_directApp.swift to swap to AppTabView on the next
+    // render — no fullScreenCover needed.
+    //
+    // v2 forward-pointer: the next onboarding slice (per
+    // `docs/AI_INTEGRATION_PLAN.md` §12.6) will turn this screen into an
+    // interest-collection step — "what do you want to be more curious
+    // about?" — that writes `UserProfile.interestSeeds` so Daily Direct
+    // and trail generation can personalize from day one instead of
+    // relying on the hardcoded personal seed list in §12.2. The flag
+    // here will move alongside `interestSeeds` into a single
+    // `onboardingState` value at that point.
+    @AppStorage("onboardingComplete") private var onboardingComplete = false
+
     @State private var signInCoordinator = AppleSignInCoordinator()
     @Environment(\.modelContext) private var modelContext
 
@@ -59,7 +72,7 @@ struct OnboardingView: View {
 
                         Spacer().frame(height: 28)
 
-                        Button(action: { showDashboard = true }) {
+                        Button(action: { onboardingComplete = true }) {
                             Text("sign up")
                                 .font(.system(size: 16, weight: .regular))
                                 .foregroundColor(.white)
@@ -71,7 +84,7 @@ struct OnboardingView: View {
 
                         Spacer().frame(height: 12)
 
-                        Button(action: { showDashboard = true }) {
+                        Button(action: { onboardingComplete = true }) {
                             Text("log in")
                                 .font(.system(size: 16, weight: .regular))
                                 .foregroundColor(Color(hex: "#2C2825"))
@@ -105,13 +118,18 @@ struct OnboardingView: View {
         }
         .ignoresSafeArea()
         .preferredColorScheme(.light)
-        .fullScreenCover(isPresented: $showDashboard) {
-            AppTabView()
-        }
     }
 
     @MainActor
     private func signInWithApple() async {
+        // Apple Sign-In is wired but optional in v1 — see the deferral
+        // notes in re_directApp.swift's RootView comment. The button
+        // remains available because the entitlement is already configured
+        // and the coordinator + Keychain persister are already on disk
+        // (low-cost preservation in case App Store distribution becomes
+        // real later). On success, the same `onboardingComplete` flag is
+        // flipped as the plain sign-up/log-in buttons, so the post-auth
+        // user journey is identical.
         do {
             let result = try await signInCoordinator.signIn()
             let persister = AppleSignInPersister(
@@ -119,7 +137,7 @@ struct OnboardingView: View {
                 context: modelContext
             )
             try persister.persist(result)
-            showDashboard = true
+            onboardingComplete = true
         } catch {
             #if DEBUG
             print("⚠️ Apple Sign-In failed: \(error)")
