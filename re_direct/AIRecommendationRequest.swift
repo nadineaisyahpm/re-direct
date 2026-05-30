@@ -45,7 +45,7 @@ final class AIRecommendationRequest: Codable, Equatable, @unchecked Sendable {
         timeAvailableMinutes: Int,
         excludePromptHashes: [String] = [],
         providerPreference: AIProviderPreference = .auto,
-        locale: String = Locale.current.identifier
+        locale: String = AIRecommendationRequest.bcp47Locale()
     ) {
         self.interests = interests
         self.mood = mood
@@ -58,6 +58,24 @@ final class AIRecommendationRequest: Codable, Equatable, @unchecked Sendable {
     // Equatable — manual implementation since classes don't synthesize.
     // Compares by value (field-by-field), not by identity. Existing call
     // sites that relied on the struct's synthesized `==` keep working.
+    /// Returns the current locale in BCP-47 hyphen format (`en-US`) required
+    /// by the proxy schema (`^[a-z]{2}(-[A-Z]{2})?$`).
+    /// `Locale.current.identifier` uses Apple's underscore format (`en_US`)
+    /// which the proxy rejects with a 400. Strips script subtags so
+    /// e.g. `zh_Hans_CN` → `zh-CN`.
+    static func bcp47Locale(from locale: Locale = .current) -> String {
+        let components = locale.identifier
+            .replacingOccurrences(of: "_", with: "-")
+            .components(separatedBy: "-")
+        guard let language = components.first, language.count == 2 else {
+            return components.first.map { String($0.prefix(2)).lowercased() } ?? "en"
+        }
+        if let region = components.dropFirst().first(where: { $0.count == 2 }) {
+            return "\(language.lowercased())-\(region.uppercased())"
+        }
+        return language.lowercased()
+    }
+
     static func == (lhs: AIRecommendationRequest, rhs: AIRecommendationRequest) -> Bool {
         lhs.interests == rhs.interests
             && lhs.mood == rhs.mood

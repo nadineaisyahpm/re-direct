@@ -34,7 +34,7 @@ enum AITrailRequestBuilder {
         rootRecencyBucket: String,
         interestSeeds: [String],
         seededTopicSlugs: [String]? = nil,
-        locale: String = Locale.current.identifier,
+        locale: String = AITrailRequestBuilder.bcp47Locale(),
         maxSteps: Int = AITrailRequestBuilder.defaultMaxSteps
     ) -> AITrailRequest {
         AITrailRequest(
@@ -72,7 +72,7 @@ enum AITrailRequestBuilder {
         interestSeeds: [String],
         seededTopicSlugs: [String]? = nil,
         now: Date = .now,
-        locale: String = Locale.current.identifier,
+        locale: String = AITrailRequestBuilder.bcp47Locale(),
         maxSteps: Int = AITrailRequestBuilder.defaultMaxSteps
     ) -> AITrailRequest {
         build(
@@ -141,7 +141,7 @@ enum AITrailRequestBuilder {
         forRoot engagement: CuriosityEngagement,
         interestSeeds: [String],
         now: Date = .now,
-        locale: String = Locale.current.identifier,
+        locale: String = AITrailRequestBuilder.bcp47Locale(),
         maxSteps: Int = AITrailRequestBuilder.defaultMaxSteps
     ) -> AITrailCacheKey {
         AITrailCacheKey(
@@ -158,5 +158,34 @@ enum AITrailRequestBuilder {
             locale: locale,
             maxSteps: maxSteps
         )
+    }
+
+    // ─────────────────────────────────────────
+    // MARK: - BCP-47 locale helper
+    // ─────────────────────────────────────────
+
+    /// Returns the current locale in BCP-47 hyphen format (`en-US`),
+    /// which is what the proxy schema requires (`^[a-z]{2}(-[A-Z]{2})?$`).
+    ///
+    /// `Locale.current.identifier` returns Apple's underscore format
+    /// (`en_US`, `zh_Hans_CN`). The proxy rejects that with a 400.
+    /// This helper normalises the separator and strips script subtags
+    /// (e.g. `zh_Hans_CN` → `zh-CN`) so the result always matches the
+    /// proxy's two-component regex.
+    static func bcp47Locale(from locale: Locale = .current) -> String {
+        let components = locale.identifier
+            .replacingOccurrences(of: "_", with: "-")
+            .components(separatedBy: "-")
+
+        guard let language = components.first, language.count == 2 else {
+            return components.first.map { String($0.prefix(2)).lowercased() } ?? "en"
+        }
+
+        // Skip script subtags (length > 2, e.g. "Hans"); take the first
+        // two-letter region code if present.
+        if let region = components.dropFirst().first(where: { $0.count == 2 }) {
+            return "\(language.lowercased())-\(region.uppercased())"
+        }
+        return language.lowercased()
     }
 }
