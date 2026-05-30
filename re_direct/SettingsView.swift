@@ -196,27 +196,16 @@ struct SettingsView: View {
                             }
                         }
 
-                        section(
-                            title: "Screen Time",
-                            caption: "parked for v2",
-                            delay: 0.48
-                        ) {
-                            SettingsRow(icon: "iphone.gen3.radiowaves.left.and.right",
-                                        label: "screen-time connection",
-                                        hint: "tracks app usage when this lands") {
-                                italicValue("not yet enabled")
-                            }
-                            SettingsRow(icon: "person.2.badge.gearshape",
-                                        label: "app-boundary permission",
-                                        hint: "lets re:direct gently limit apps when this lands") {
-                                italicValue("not enabled")
-                            }
-                            SettingsRow(icon: "hand.raised",
-                                        label: "your logged rabbit holes",
-                                        hint: "what re:direct uses for now") {
-                                StatusChip(text: "ready", variant: .positive)
-                            }
-                        }
+                        // Screen Time section removed 2026-05-31 — the integration
+                        // is deferred indefinitely (Family Controls entitlement
+                        // unavailable on personal dev account; see
+                        // docs/DEVICE_ACTIVITY_FEASIBILITY.md). The "your logged
+                        // rabbit holes / what re:direct uses for now" row was a
+                        // narrative-context substitute and goes away with its
+                        // parent section. Closed QA1 F12.2 (truncated hint copy)
+                        // and F12.3 (section-removal decision) in one stroke.
+                        // The deferral story is consolidated in
+                        // docs/V1_SCOPE_DECISIONS.md for portfolio reference.
 
                         section(
                             title: "Local data controls",

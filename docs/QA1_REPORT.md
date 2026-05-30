@@ -23,7 +23,7 @@
 | 8 | Manual thread creation | ✅ Pass |
 | 9 | Attach loose end to thread | ✅ Pass |
 | 10 | Thread preview | ✅ Pass |
-| 11 | Settings local data / parked capabilities | ✅ Pass (with F12.2) |
+| 11 | Settings local data / parked capabilities | ✅ Pass (Screen Time section removed 2026-05-31 per F12.3; F12.2 moot) |
 | 12 | Privacy — no reflection body leaks | ✅ Pass |
 | 13 | Cost — deepen cache behavior | ✅ Pass — verified on simulator 2026-05-30 (tap 2 instant + dashboard silent) |
 | 14 | Physical device sanity check | ✅ Covered by existing sentinel/privacy tests (see note) |
@@ -95,18 +95,9 @@ reclassified to P3 below and closed via the onboarding-persistence fix
 **Suspected location:** `re_direct/RabbitHoleView.swift` — `emptyInvitation` container missing `frame(maxHeight: .infinity)` or equivalent vertical centering  
 **Recommended fix slice:** Layout-only fix, single commit. Add `Spacer()` or `frame(maxHeight: .infinity, alignment: .center)` to the empty state container.
 
-#### F12.2 — Settings Screen Time hint text truncated
+#### F12.2 — Settings Screen Time hint text truncated  ✅ CLOSED 2026-05-31
 
-**Area:** 11 (Settings)  
-**Reproduction:**
-1. Navigate to Settings tab
-2. Scroll to Screen Time / parked capabilities section
-3. Observe hint text on "screen-time connection" and "app-boundary permission" rows
-
-**Expected:** Hint text reads fully  
-**Actual:** "screen-time connection" hint truncates to `tracks app usage when thi...`; "app-boundary permission" hint truncates to `lets re:direct gently limit apps...`  
-**Suspected location:** `re_direct/SettingsView.swift` — hint text strings too long for the row's available width; either shorten copy or increase row height  
-**Recommended fix slice:** Copy-only or layout fix, single commit. Can be combined with F2.1 in one "layout polish" commit.
+**Resolution:** Moot via F12.3 — the entire Screen Time section was removed from Settings, so the truncated rows no longer exist. Resolved without a cosmetic copy fix because the structural decision rendered the cosmetic question irrelevant.
 
 ---
 
@@ -148,13 +139,16 @@ reclassified to P3 below and closed via the onboarding-persistence fix
 **Suspected location:** `re_direct/RabbitHoleView.swift` — `LooseEndRow` pill styling  
 **Recommended fix slice:** Polish slice. Increase visual differentiation (color, icon weight, or label copy). Scope to be defined before implementing.
 
-#### F12.3 — Screen Time section in Settings: consider removing while parked
+#### F12.3 — Screen Time section in Settings: consider removing while parked  ✅ CLOSED 2026-05-31
 
-**Area:** 11 (Settings)  
-**Status:** Decision pending — user message was cut off mid-thought  
-**Proposal:** Remove or collapse the entire Screen Time / parked capabilities section from Settings while Timer/DeviceActivity remains parked for v2. Rationale: (a) "not enabled" rows for parked features add noise without actionable user value; (b) the `your logged rabbit holes` row arguably belongs in the **Local data** section above, not under Screen Time.  
-**Suspected location:** `re_direct/SettingsView.swift`  
-**Recommended fix slice:** Decision needed first. If approved: single commit, Settings-only.
+**Decision:** Remove entirely from the app surface, document the deferral + pivot story in `docs/V1_SCOPE_DECISIONS.md` for portfolio reference.
+
+**Rationale:** Inert "not enabled" rows added noise without user value. A portfolio reviewer doesn't care about deep meaning in Settings — what they care about is whether the deferral *story* is told well in the docs, which `V1_SCOPE_DECISIONS.md` now does. The Screen Time / DeviceActivity scaffolding remains preserved in code and schema (`BoundarySession`, `TimerSession`) as forward compatibility, only the in-app surface is removed.
+
+**Resolution:**
+- Removed the entire Screen Time section (3 rows + section header) from `SettingsView.swift`. A retained comment in-place documents what was removed, when, why, and where the deferral story now lives.
+- Created `docs/V1_SCOPE_DECISIONS.md` as the consolidated v1 scope-and-pivot narrative covering Screen Time, Apple Sign-In, App Store distribution, and v1.5 ambitions that quietly folded.
+- F12.2 (truncated hint copy) became moot — the offending rows no longer exist.
 
 ---
 
@@ -179,11 +173,11 @@ reclassified to P3 below and closed via the onboarding-persistence fix
 
 2. ~~**iOS Slice 7.1** — Apple Sign-In capability enable + Keychain persistence.~~ **Deferred indefinitely.** Replaced by a 10-minute `@AppStorage("onboardingComplete")` flag (F4.1 ✅ CLOSED 2026-05-31). App is single-user local-first portfolio; Apple Sign-In was over-engineering for the actual problem. Slice 7.1 remains the resume-point if App Store distribution is ever pursued; all contract files (`AppleSignInCoordinator`, `KeychainAppleIDStore`, `AppleSignInPersister`, `UserProfile.onboardingComplete` schema slot) are preserved on disk.
 
-3. **iOS layout/copy polish slice** — F2.1 (Rabbit Hole empty state centering) + F12.2 (Settings hint truncation). Same file family (`RabbitHoleView.swift`, `SettingsView.swift`), single small commit. **← Next slice.**
+3. **iOS layout polish slice** — F2.1 (Rabbit Hole empty state centering) only. F12.2 dropped from this slice (moot per F12.3 resolution). **← Next slice.**
 
 4. **iOS launch polish slice** — F1.3 (Core Data error spike on first install). Tiny change in `re_directApp.swift`.
 
-5. **Decision: F12.3** — Screen Time section removal. Needs explicit user direction before touching Settings.
+5. ~~**Decision: F12.3** — Screen Time section removal.~~ **✅ Done 2026-05-31** — section removed, deferral consolidated into `docs/V1_SCOPE_DECISIONS.md`.
 
 6. **Deferred** — F5.2 (loose-end pill differentiation), F10.4 (progress-oriented thread UI). Scope to be defined.
 
