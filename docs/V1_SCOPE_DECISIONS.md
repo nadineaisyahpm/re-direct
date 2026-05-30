@@ -43,6 +43,10 @@ A single-user, local-first iOS app for noticing and redirecting attention. Manua
 
 **In-app surface:** the Apple Sign-In button in OnboardingView remains (still functional end-to-end via the preserved coordinator), but the Settings → "Sign in with Apple" section that previously surfaced infrastructure status was removed on 2026-05-31. Same rationale as §2.1: a section showing "capability: not enabled · manual Xcode step · Slice 7.1" was noise without user value once the slice was decided as deferred.
 
+The single `apple identity` row in the Settings → Privacy section (`AfterFirstUnlockThisDeviceOnly` · "this device only") was deliberately kept as a privacy-narrative anchor — it's a claim about the app's data posture rather than infrastructure status, and even with Apple Sign-In unactivated the claim "if there were Apple identity data, it would stay on this device" remains true. Parking it costs nothing; re-adding it later when context has faded would.
+
+**v2 thinking:** if Slice 7.1 ever activates, the natural extension isn't just "make Apple Sign-In work" — it's "introduce an account database that makes the demo feel mature." That probably looks like: an `Account` model in SwiftData (or a sibling lightweight backend if cross-device sync becomes interesting), a real user/profile concept that the existing `UserProfile` schema slot can grow into, and a sign-out/account-management surface in Settings. The `apple identity` row in Privacy is the existing UI hook where account state would surface; the Sign-in-with-Apple section can be re-added (or restructured into an "Account" section) when there's actually something to show.
+
 **Where it's documented:**
 - `docs/QA1_REPORT.md` F4.1 entry — reclassification rationale and resolution
 - iOS commit `3ea3774` — the actual fix
