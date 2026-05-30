@@ -1,8 +1,8 @@
 # QA1 Milestone Findings Report
 
-**Date:** 2026-05-29  
+**Date:** 2026-05-29 (initial) · **F6.1 + Areas 6/7/13 closed 2026-05-30**  
 **Tester:** Manual (Nadine) + automated inspection (Claude)  
-**Build:** post-6E-D2 / post-QA0-Slices-A/B/C  
+**Build:** post-6E-D2 / post-QA0-Slices-A/B/C; F6.1 fix landed in iOS `da1776e` / `2e6b49f`, proxy `a39d7de`  
 **Branch:** main  
 **Tests at start:** 357 / 357 passing  
 **Scope:** v1 spine hardening pass — simulator detailed QA + code inspection
@@ -18,17 +18,17 @@
 | 3 | Re:Log manual rabbit-hole logging | ✅ Pass |
 | 4 | Rabbit Hole loose end appears | ✅ Pass |
 | 5 | Deepen flow (sheet presentation) | ✅ Pass |
-| 6 | TrailPreviewSheet loading/success/failure | ⚠️ F6.1 blocker |
-| 7 | Accept trail → `.aiDeepened` thread | ⚠️ Blocked by F6.1 |
+| 6 | TrailPreviewSheet loading/success/failure | ✅ Pass (F6.1 closed 2026-05-30) |
+| 7 | Accept trail → `.aiDeepened` thread | ✅ Pass — verified end-to-end on simulator 2026-05-30 |
 | 8 | Manual thread creation | ✅ Pass |
 | 9 | Attach loose end to thread | ✅ Pass |
 | 10 | Thread preview | ✅ Pass |
 | 11 | Settings local data / parked capabilities | ✅ Pass (with F12.2) |
 | 12 | Privacy — no reflection body leaks | ✅ Pass |
-| 13 | Cost — deepen cache behavior | ⚠️ Blocked by F6.1 |
+| 13 | Cost — deepen cache behavior | ✅ Pass — verified on simulator 2026-05-30 (tap 2 instant + dashboard silent) |
 | 14 | Physical device sanity check | ✅ Covered by existing sentinel/privacy tests (see note) |
 
-**Area 13 note:** Cache hit behavior (`AITrailSessionStore` 1h TTL) could not be verified because a successful trail response was never received (F6.1 upstream timeout). Cache logic is unit-tested in `AITrailSessionStoreTests` but was not exercised end-to-end in this pass.
+**Area 13 note (updated 2026-05-30):** Cache hit behavior verified end-to-end on simulator after F6.1 fix landed. Tap 2 on the same loose end produced an instant trail sheet with identical content and zero new log lines in the Cloudflare dashboard — confirming the proxy was never called and `AITrailSessionStore` returned the cached response. Original blocker (no successful trail response) is resolved; cache logic now exercised live in addition to existing `AITrailSessionStoreTests` unit coverage.
 
 **Area 14 note:** Reflection body exclusion is enforced at the type level via `EngagementPreviewRowModel` (structurally excludes reflection text) and is sentinel-tested in `AITrailMaterializerTests` and `AITrailRequestBuilderTests`. No separate manual injection pass was run. A dedicated physical-device injection pass can be scheduled if desired.
 
@@ -38,21 +38,32 @@
 
 ### 🔴 P0 — Critical (blocks core feature)
 
-#### F6.1 — `/v1/trail` 504 upstream_timeout — trail feature unusable in field
+#### F6.1 — `/v1/trail` 504 upstream_timeout — trail feature unusable in field  ✅ CLOSED 2026-05-30
 
 **Area:** 6 (TrailPreviewSheet)  
-**Reproduction:**
+**Original reproduction:**
 1. Log a rabbit hole via Re:Log
 2. Navigate to Rabbit Hole tab → loose ends section
 3. Tap `[deepen]` on any loose end
 4. Wait — TrailPreviewSheet enters loading state
 5. After ~8s timeout, sheet shows failure state
 
-**Expected:** Trail loads with 3–5 steps within 8s timeout  
-**Actual:** Both DeepSeek and OpenRouter providers return 504 upstream_timeout; `TrailPreviewSheet` falls to failure state every time  
-**Impact:** The entire Phase 6E trail feature is non-functional in the field. `[deepen]` pill is visible but always fails. Accept flow (Area 7), cache verification (Area 13), and `.aiDeepened` thread materialization (Area 7) could not be tested.  
-**Suspected location:** `re_direct_ai_proxy/` — trail handler upstream timeout too short, or provider prompt too large for the configured token budget  
-**Recommended fix slice:** Proxy repo only — increase trail-handler upstream timeout to 25–30s, or investigate whether the trail prompt exceeds the provider's response window. Check `re_direct_ai_proxy/src/handlers/trail.ts` timeout config and `max_tokens` cap (currently 1500).
+**Original suspected cause (later proved incorrect):** proxy trail handler upstream timeout too short, or provider prompt too large for the configured token budget.
+
+**Actual root cause:** `Locale.current.identifier` on iOS returns Apple's underscore format (`en_US`). The proxy trail/recommendation schemas validate locale against the BCP-47 regex `^[a-z]{2}(-[A-Z]{2})?$` which requires hyphen format (`en-US`). Every iOS request — trail and recommendation both — was silently rejected at proxy validation with HTTP 400 `invalid_input` before DeepSeek was ever called. The 504-timeout symptoms observed were a red herring; the proxy never reached its provider call. The timeout-raise mitigation (8s → 28s on the proxy) was real and useful work but did not and could not address the iOS-side failure.
+
+**Resolution:**
+- iOS commit `da1776e` introduced `bcp47Locale()` helpers on both `AITrailRequestBuilder` and `AIRecommendationRequest`. Helper swaps `_` → `-` and strips script subtags (`zh_Hans_CN` → `zh-CN`).
+- Proxy commit `a39d7de` added contract fixture tests (`test/contract/`) and a `verify-contract.sh` script to catch this class of bug at CI time.
+- iOS commit `2e6b49f` added wire-format encoder tests to `AITrailRequestBuilderTests` (BCP-47 assertion, no-underscore guard, complete-keys, no-extra-keys).
+- Proxy logs were silent until commit `3357359` enabled Workers Logs observability in `wrangler.toml`. The root cause was diagnosable only after that change.
+
+**Verified live on simulator 2026-05-30:**
+- Tap `[deepen]` → `.success(response)` → trail sheet with 4 valid steps
+- Tap `accept trail` → thread materialized as `sourceKind = .aiDeepened`
+- Tap `[deepen]` again on a fresh loose end (cache test) → instant return, zero proxy log lines → Area 13 also closed
+
+**Lesson:** the contract-fixture test layer added in `a39d7de` would have caught this bug at Phase 6E-B ship time. The full closed-operation writeup with phases, falsified hypotheses, and lessons is in `re_direct_ai_proxy/docs/TRAIL_LATENCY_DEBUG.md`.
 
 ---
 
@@ -160,9 +171,9 @@
 
 ## Recommended Slice Ordering
 
-1. **Proxy slice** — fix F6.1 in `re_direct_ai_proxy/`. Critical blocker; trail feature is dead without it. Check `trail.ts` timeout + `max_tokens` cap. Proxy repo only, no iOS changes.
+1. ~~**Proxy slice** — fix F6.1 in `re_direct_ai_proxy/`.~~ **✅ Done 2026-05-30.** Root cause was iOS locale format (`en_US` vs `en-US`), not proxy timeout. Resolved across iOS commits `da1776e` + `2e6b49f` and proxy commit `a39d7de`. Contract fixture tests + iOS encoder tests added as regression armor. Areas 6, 7, 13 all closed.
 
-2. **iOS Slice 7.1** — Apple Sign-In capability enable + Keychain persistence. Closes F4.1 + F1.5 together. Requires manual Xcode entitlement step.
+2. **iOS Slice 7.1** — Apple Sign-In capability enable + Keychain persistence. Closes F4.1 + F1.5 together. Requires manual Xcode entitlement step. **← Next slice.**
 
 3. **iOS layout/copy polish slice** — F2.1 (Rabbit Hole empty state centering) + F12.2 (Settings hint truncation). Same file family (`RabbitHoleView.swift`, `SettingsView.swift`), single small commit.
 
@@ -171,6 +182,8 @@
 5. **Decision: F12.3** — Screen Time section removal. Needs explicit user direction before touching Settings.
 
 6. **Deferred** — F5.2 (loose-end pill differentiation), F10.4 (progress-oriented thread UI). Scope to be defined.
+
+7. **Latency follow-ups** (conditional, in proxy repo) — §5.3 in-proxy retry, §5.4 iOS cooldown, vestigial `provider_preference` cleanup. Gated on observed production data via the `provider_fetch_request_ms` / `provider_fetch_body_ms` / `provider_parse_ms` instrumentation now live in proxy commit `83a7bd5`. First real iOS-originated sample (2026-05-30) showed TTFB-dominant latency at 15.7s on a 28s ceiling — within budget but with a real tail. Accumulate more samples before shipping defensive retry infrastructure.
 
 ---
 
