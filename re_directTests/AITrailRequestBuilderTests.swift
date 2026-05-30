@@ -525,4 +525,97 @@ struct AITrailRequestBuilderTests {
         // Engagement id is not in the body.
         #expect(!json.contains(engagement.id.uuidString))
     }
+
+    // ─────────────────────────────────────────
+    // MARK: - Wire format / contract tests
+    // ─────────────────────────────────────────
+    //
+    // These tests pin the EXACT JSON the proxy will receive. They are the
+    // primary guard against the class of bug where a small iOS/proxy mismatch
+    // causes silent 400s — e.g. locale "en_US" (Apple format) vs "en-US"
+    // (BCP-47, what the proxy schema requires).
+    //
+    // If a test here fails, update BOTH the iOS code AND the proxy contract
+    // fixture at re_direct_ai_proxy/test/contract/ios-trail-request.fixture.json.
+
+    @Test("Locale is BCP-47 hyphen format, not Apple underscore format")
+    func localeIsBCP47() {
+        let locale = AITrailRequestBuilder.bcp47Locale()
+        // Must match the proxy regex: ^[a-z]{2}(-[A-Z]{2})?$
+        #expect(!locale.contains("_"),
+                "bcp47Locale() returned '\(locale)' — underscores fail the proxy regex")
+        let range = locale.range(of: #"^[a-z]{2}(-[A-Z]{2})?$"#, options: .regularExpression)
+        #expect(range != nil,
+                "bcp47Locale() returned '\(locale)' — doesn't match ^[a-z]{2}(-[A-Z]{2})?$")
+    }
+
+    @Test("bcp47Locale strips script subtags from complex locales")
+    func localeStripsScriptSubtag() {
+        // zh_Hans_CN should become zh-CN, not zh-Hans (which fails the 2-char region check)
+        let mock = Locale(identifier: "zh_Hans_CN")
+        let result = AITrailRequestBuilder.bcp47Locale(from: mock)
+        #expect(result == "zh-CN", "Expected zh-CN, got \(result)")
+    }
+
+    @Test("bcp47Locale handles simple en_US format")
+    func localeConvertsEnUS() {
+        let mock = Locale(identifier: "en_US")
+        let result = AITrailRequestBuilder.bcp47Locale(from: mock)
+        #expect(result == "en-US", "Expected en-US, got \(result)")
+    }
+
+    @Test("Encoded JSON contains all required proxy keys")
+    func wireKeysComplete() throws {
+        let request = AITrailRequestBuilder.build(
+            rootTitle: "bioluminescence",
+            rootMethodSlug: "read",
+            rootRecencyBucket: "today",
+            interestSeeds: ["Neuroscience"],
+            locale: "en-US"
+        )
+        let data = try AIProxyHTTPClient.encodeTrailBody(request)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+
+        let required = ["locale", "root_title", "root_method_slug",
+                        "root_recency_bucket", "interest_seeds", "provider_preference"]
+        for key in required {
+            #expect(json[key] != nil, "Missing required wire key: \(key)")
+        }
+    }
+
+    @Test("Encoded JSON contains no keys the proxy strict schema rejects")
+    func wireKeysNoExtras() throws {
+        let request = AITrailRequestBuilder.build(
+            rootTitle: "test",
+            rootMethodSlug: "read",
+            rootRecencyBucket: "today",
+            interestSeeds: [],
+            locale: "en-US"
+        )
+        let data = try AIProxyHTTPClient.encodeTrailBody(request)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+
+        let allowed: Set<String> = [
+            "locale", "root_title", "root_method_slug", "root_recency_bucket",
+            "interest_seeds", "seeded_topic_slugs", "max_steps", "provider_preference"
+        ]
+        for key in json.keys {
+            #expect(allowed.contains(key),
+                    "Unexpected wire key '\(key)' — proxy strict mode will return 400")
+        }
+    }
+
+    @Test("provider_preference always encodes as 'auto' by default")
+    func providerPreferenceDefault() throws {
+        let request = AITrailRequestBuilder.build(
+            rootTitle: "test",
+            rootMethodSlug: "read",
+            rootRecencyBucket: "today",
+            interestSeeds: [],
+            locale: "en-US"
+        )
+        let data = try AIProxyHTTPClient.encodeTrailBody(request)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        #expect(json["provider_preference"] as? String == "auto")
+    }
 }
