@@ -29,7 +29,7 @@ A single-user, local-first iOS app for noticing and redirecting attention. Manua
 - `docs/AI_INTEGRATION_PLAN.md` — the AI lane as the alternative forward path, with explicit framing in §1 ("Why this brief exists")
 - `docs/ROADMAP.md` — Phase 7B is the named resumption slice if entitlement access changes
 
-**In-app surface:** none in v1. The Settings → Screen Time section was removed on 2026-05-31 because showing inert "not enabled" rows added noise without providing user value. The capability remains scaffolded in code and schema; only the in-app surface is removed.
+**In-app surface:** none in v1. The Settings → Screen Time section was removed on 2026-05-31 because showing inert "not enabled" rows added noise without providing user value. The capability remains scaffolded in code and schema; only the in-app surface is removed. The Settings → "Sign in with Apple" section was removed on the same date for the same reason (see §2.2).
 
 ### 2.2 Apple Sign-In + Keychain identity persistence — deferred indefinitely
 
@@ -40,6 +40,8 @@ A single-user, local-first iOS app for noticing and redirecting attention. Manua
 **The fix that shipped instead:** a 10-minute `@AppStorage("onboardingComplete")` flag in `re_directApp.swift`'s `RootView`. On first launch, OnboardingView appears; tapping any entry button flips the flag; subsequent cold launches branch straight to AppTabView. UserDefaults-backed because there's no security requirement (anyone with the device already has full local data access).
 
 **Forward compatibility preserved:** `AppleSignInCoordinator`, `AppleSignInPersister`, `KeychainAppleIDStore`, and the `UserProfile.onboardingComplete` schema slot are all preserved on disk. If App Store distribution is ever pursued, Slice 7.1 is the ready-to-resume entry point with all contract files in place.
+
+**In-app surface:** the Apple Sign-In button in OnboardingView remains (still functional end-to-end via the preserved coordinator), but the Settings → "Sign in with Apple" section that previously surfaced infrastructure status was removed on 2026-05-31. Same rationale as §2.1: a section showing "capability: not enabled · manual Xcode step · Slice 7.1" was noise without user value once the slice was decided as deferred.
 
 **Where it's documented:**
 - `docs/QA1_REPORT.md` F4.1 entry — reclassification rationale and resolution

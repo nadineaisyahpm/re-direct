@@ -140,8 +140,8 @@ struct SettingsView: View {
                             }
                             SettingsRow(icon: "sparkles",
                                         label: "AI proxy",
-                                        hint: "provider-agnostic · Phase 6") {
-                                italicValue("contract only · disabled")
+                                        hint: "DeepSeek · trail + recommendation") {
+                                italicValue("live · dev")
                             }
                             SettingsRow(icon: "chart.bar.xaxis",
                                         label: "analytics",
@@ -174,38 +174,14 @@ struct SettingsView: View {
                             }
                         }
 
-                        section(
-                            title: "Sign in with Apple",
-                            caption: "identity surface",
-                            delay: 0.40
-                        ) {
-                            SettingsRow(icon: "apple.logo",
-                                        label: "coordinator",
-                                        hint: "AppleSignInCoordinator") {
-                                StatusChip(text: "ready", variant: .positive)
-                            }
-                            SettingsRow(icon: "checkmark.seal",
-                                        label: "capability",
-                                        hint: "manual Xcode step · Slice 7.1") {
-                                StatusChip(text: "not enabled", variant: .pending)
-                            }
-                            SettingsRow(icon: "key",
-                                        label: "keychain",
-                                        hint: "KeychainAppleIDStore") {
-                                italicValue("ready")
-                            }
-                        }
+                        // Sign in with Apple section removed 2026-05-31 — Slice 7.1
+                        // deferred indefinitely; see docs/V1_SCOPE_DECISIONS.md §2.2.
+                        // Coordinator + Keychain store remain on disk for forward
+                        // compatibility.
 
-                        // Screen Time section removed 2026-05-31 — the integration
-                        // is deferred indefinitely (Family Controls entitlement
-                        // unavailable on personal dev account; see
-                        // docs/DEVICE_ACTIVITY_FEASIBILITY.md). The "your logged
-                        // rabbit holes / what re:direct uses for now" row was a
-                        // narrative-context substitute and goes away with its
-                        // parent section. Closed QA1 F12.2 (truncated hint copy)
-                        // and F12.3 (section-removal decision) in one stroke.
-                        // The deferral story is consolidated in
-                        // docs/V1_SCOPE_DECISIONS.md for portfolio reference.
+                        // Screen Time section removed 2026-05-31 — deferred
+                        // indefinitely; see docs/V1_SCOPE_DECISIONS.md §2.1.
+                        // BoundarySession + TimerSession schema preserved.
 
                         section(
                             title: "Local data controls",
